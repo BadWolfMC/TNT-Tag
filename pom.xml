@@ -117,7 +117,7 @@
         <dependency>
             <groupId>com.github.Revxrsal.Lamp</groupId>
             <artifactId>bukkit</artifactId>
-            <version>3.1.5</version>
+            <version>3.2.1</version>
         </dependency>
         <dependency>
             <groupId>dev.dejvokep</groupId>
