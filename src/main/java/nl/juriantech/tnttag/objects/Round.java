@@ -23,6 +23,7 @@ public class Round {
     private final Tnttag plugin;
     private final GameManager gameManager;
     private int roundDuration;
+    public boolean ended = false;
 
     public Round(Tnttag plugin, GameManager gameManager) {
         this.plugin = plugin;
@@ -43,6 +44,7 @@ public class Round {
             @Override
             public void run() {
                 roundDuration--;
+                gameManager.getScoreboardManager().update();
                 for (Player player : gameManager.playerManager.getPlayers().keySet()) {
                     player.setLevel(Math.max(roundDuration, 0));
                     if (gameManager.playerManager.getPlayers().get(player) == PlayerType.TAGGER) {
@@ -50,13 +52,16 @@ public class Round {
                         ChatUtils.sendActionBarMessage(player, ChatUtils.getRaw("actionBarMessages.tagger"));
                     } else if (gameManager.playerManager.getPlayers().get(player) == PlayerType.SURVIVOR) {
                         ChatUtils.sendActionBarMessage(player, ChatUtils.getRaw("actionBarMessages.survivor"));
+                    } else if (gameManager.playerManager.getPlayers().get(player) == PlayerType.SPECTATOR) {
+                        ChatUtils.sendActionBarMessage(player, ChatUtils.getRaw("actionBarMessages.spectator"));
                     }
                 }
 
                 if (roundDuration == 0) {
                     cancel();
+                    ended = true;
                     end(false);
-                    if (gameManager.playerManager.getPlayers().values().stream().noneMatch(playerType -> playerType == PlayerType.SURVIVOR)) {
+                    if (gameManager.playerManager.getPlayerCount() == 1) {
                         gameManager.setGameState(GameState.ENDING, false);
                     } else {
                         //Start a new round
@@ -120,6 +125,7 @@ public class Round {
 
             ParticleUtils.Firework(player.getLocation(), 0);
         }
+        ended = true;
     }
 
     public void updateCompass(Player player) {
@@ -149,8 +155,12 @@ public class Round {
 
         playersInArena.remove(player);
         playersInArena.removeIf(p -> !gameManager.playerManager.getPlayers().containsKey(p));
-        playersInArena.removeIf(p -> p != null && gameManager.playerManager.getPlayers().get(p).equals(PlayerType.TAGGER));
+        playersInArena.removeIf(p -> p != null && !gameManager.playerManager.getPlayers().get(p).equals(PlayerType.SURVIVOR));
         playersInArena.sort(Comparator.comparingDouble(o -> o.getLocation().distanceSquared(location)));
         return playersInArena.isEmpty() ? null : playersInArena.get(0);
+    }
+
+    public int getRoundDuration() {
+        return roundDuration;
     }
 }

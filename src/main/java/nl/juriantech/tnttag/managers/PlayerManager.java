@@ -1,11 +1,13 @@
 package nl.juriantech.tnttag.managers;
 
+import com.alessiodp.parties.api.interfaces.Party;
 import de.simonsator.partyandfriends.spigot.api.party.PlayerParty;
 import nl.juriantech.tnttag.Tnttag;
 import nl.juriantech.tnttag.api.PlayerJoinArenaEvent;
 import nl.juriantech.tnttag.api.PlayerLeaveArenaEvent;
 import nl.juriantech.tnttag.enums.GameState;
 import nl.juriantech.tnttag.enums.PlayerType;
+import nl.juriantech.tnttag.hooks.PartiesHook;
 import nl.juriantech.tnttag.hooks.PartyAndFriendsHook;
 import nl.juriantech.tnttag.objects.PlayerData;
 import nl.juriantech.tnttag.objects.PlayerInformation;
@@ -32,63 +34,122 @@ public class PlayerManager {
         this.players = new HashMap<>();
         this.lobbyManager = plugin.getLobbyManager();
     }
-
     public synchronized void addPlayer(Player player) {
+        // Already in lobby?
         if (!lobbyManager.playerIsInLobby(player)) {
-            lobbyManager.enterLobby(player);
+            lobbyManager.enterLobby(player, true);
         }
 
         int minPlayers = gameManager.arena.getMinPlayers();
         int maxPlayers = gameManager.arena.getMaxPlayers();
 
-        if (gameManager.state == GameState.INGAME || getPlayerCount() == maxPlayers) return; //Safety check.
-        if (players.containsKey(player)) return; //Safety check.
+        // Safety checks
+        if (gameManager.state == GameState.INGAME
+                || gameManager.state == GameState.ENDING
+                || getPlayerCount() >= maxPlayers) return;
 
-        if (plugin.getPartyAndFriendsHook() != null) {
-            PartyAndFriendsHook hook = plugin.getPartyAndFriendsHook();
-            if (hook.playerIsInParty(player.getUniqueId())) {
-                PlayerParty party = hook.getPlayerParty(player.getUniqueId());
-                if (party.getLeader().getUniqueId().equals(player.getUniqueId())) {
-                    int partySize = hook.getPlayersOfParty(party).size();
-                    if (players.size() + partySize > maxPlayers) {
+        if (players.containsKey(player)) return;
+
+        // === PartyAndFriends Hook ===
+        PartyAndFriendsHook pafHook = plugin.getPartyAndFriendsHook();
+        if (pafHook != null && pafHook.playerIsInParty(player.getUniqueId())) {
+            PlayerParty party = pafHook.getPlayerParty(player.getUniqueId());
+            if (party != null && party.getLeader().getUniqueId().equals(player.getUniqueId())) {
+                List<Player> partyPlayers = pafHook.getPlayersOfParty(party);
+
+                if (players.size() + partyPlayers.size() > maxPlayers) {
+                    ChatUtils.sendMessage(player, "party.too-much-players");
+                    return;
+                }
+
+                // Bulk add instead of recursive calls
+                for (Player partyPlayer : partyPlayers) {
+                    if (!players.containsKey(partyPlayer)) {
+                        internalAddPlayer(partyPlayer, minPlayers);
+                        ChatUtils.sendMessage(partyPlayer, "party.joined-game");
+                    }
+                }
+                return; // Party leader handled -> no double join
+            } else {
+                ChatUtils.sendMessage(player, "party.not-the-leader");
+                return;
+            }
+        }
+
+        // === Parties Hook ===
+        PartiesHook partiesHook = plugin.getPartiesHook();
+        if (partiesHook != null) {
+            Party party = partiesHook.getPlayerParty(player.getUniqueId());
+            if (party != null) {
+                if (party.getLeader().equals(player.getUniqueId())) {
+                    List<Player> partyPlayers = partiesHook.getPlayersOfParty(party);
+
+                    if (players.size() + partyPlayers.size() > maxPlayers) {
                         ChatUtils.sendMessage(player, "party.too-much-players");
                         return;
                     }
 
-                    for (Player partyPlayer : hook.getPlayersOfParty(party)) {
-                        addPlayer(partyPlayer);
-                        ChatUtils.sendMessage(player, "party.joined-game");
+                    for (Player partyPlayer : partyPlayers) {
+                        if (!players.containsKey(partyPlayer)) {
+                            internalAddPlayer(partyPlayer, minPlayers);
+                            if (!partyPlayer.getUniqueId().equals(player.getUniqueId())) {
+                                ChatUtils.sendMessage(partyPlayer, "party.joined-game");
+                            }
+                        }
                     }
+                    return;
                 } else {
                     ChatUtils.sendMessage(player, "party.not-the-leader");
+                    return;
                 }
             }
         }
 
+        // === Normal player join ===
+        internalAddPlayer(player, minPlayers);
+    }
+
+    private void internalAddPlayer(Player player, int minPlayers) {
+        // Fire event
         PlayerJoinArenaEvent event = new PlayerJoinArenaEvent(player, gameManager.arena.getName());
         Bukkit.getPluginManager().callEvent(event);
 
+        // Register player immediately (lightweight)
         players.put(player, PlayerType.WAITING);
-        gameManager.itemManager.giveWaitingItems(player);
-        teleportToLobby(player);
-        ChatUtils.sendMessage(player, "player.joined-arena");
-        broadcast(ChatUtils.getRaw("arena.player-joined").replace("{player}", player.getName()));
 
-        if (getPlayerCount() >= minPlayers) {
+        // Heavy operations delayed to next tick
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            gameManager.itemManager.giveWaitingItems(player);
+            teleportToLobby(player);
+            ChatUtils.sendMessage(player, "player.joined-arena");
+            broadcast(ChatUtils.getRaw("arena.player-joined")
+                    .replace("{player}", player.getName()));
+        });
+
+        // Start game if threshold reached (guard against multiple triggers)
+        if (gameManager.state != GameState.STARTING && getPlayerCount() >= minPlayers) {
             gameManager.start();
         }
     }
+
 
     public synchronized void removePlayer(Player player, boolean message) {
         if (!players.containsKey(player)) return;
         PlayerLeaveArenaEvent event = new PlayerLeaveArenaEvent(player, gameManager.arena.getName());
         Bukkit.getPluginManager().callEvent(event);
 
+        PlayerInformation playerInformation = plugin.getLobbyManager().getPlayerInformationMap().get(player);
+
         if (players.get(player) != PlayerType.SURVIVOR) {
             // The player lost his winstreak, we process that here to ensure that they can't bypass it by leaving while the game still lasts.
             // Incrementing the winstreak is done in the GameManager.
             PlayerData playerData = new PlayerData(player.getUniqueId());
             playerData.setWinstreak(0);
+        }
+
+        if (plugin.getTabHook() != null) {
+            String prefix = playerInformation.getTabPrefix();
+            plugin.getTabHook().setPlayerPrefix(player.getUniqueId(), prefix);
         }
 
         setPlayerType(player, PlayerType.WAITING);
@@ -109,7 +170,7 @@ public class PlayerManager {
             plugin.getLobbyManager().leaveLobby(player);
         }
 
-        if (gameManager.startRunnable != null && !gameManager.startRunnable.isCancelled() && players.size() < gameManager.arena.getMinPlayers()) {
+        if (gameManager.startRunnable != null && !gameManager.startRunnable.isCancelled() && players.size() <= gameManager.arena.getMinPlayers()) {
             gameManager.startRunnable.cancel();
             broadcast(ChatUtils.getRaw("arena.countdown-stopped").replace("{player}", player.getName()));
             gameManager.setGameState(GameState.IDLE, false);
@@ -124,7 +185,7 @@ public class PlayerManager {
             gameManager.setGameState(GameState.ENDING, true);
         }
 
-        if (players.entrySet().stream().noneMatch(p -> p.getValue() == PlayerType.TAGGER)) {
+        if (players.entrySet().stream().noneMatch(p -> p.getValue() == PlayerType.TAGGER) && gameManager.state == GameState.INGAME) {
             if (message) {
                 broadcast(ChatUtils.getRaw("arena.last-player-leaved").replace("{player}", player.getName()));
             }
@@ -142,6 +203,7 @@ public class PlayerManager {
     public void setPlayerType(Player player, PlayerType type) {
         if (!players.containsKey(player)) return; //Safety check.
         if (players.get(player) == type) return; //Safety check.
+        PlayerInformation playerInformation = plugin.getLobbyManager().getPlayerInformationMap().get(player);
 
         //If the player was a spectator before.
         if (players.get(player) == PlayerType.SPECTATOR) {
@@ -173,7 +235,12 @@ public class PlayerManager {
                 setType(player, PlayerType.WAITING);
                 player.teleport(gameManager.arena.getLobbyLocation());
 
-                setPlayerName(player, PlayerType.WAITING);
+                player.setDisplayName(playerInformation.getDisplayName());
+                player.setPlayerListName(playerInformation.getPlayerListName());
+
+                if (plugin.getTabHook() != null) plugin.getTabHook().setPlayerPrefix(player.getUniqueId(), playerInformation.getTabPrefix());
+                System.out.println("TAB hook - restoring player prefix of " + player.getName() + " to " + playerInformation.getTabPrefix());
+                player.setCollidable(true);
                 break;
             case SURVIVOR:
                 if (players.get(player) != PlayerType.TAGGER) {
@@ -202,6 +269,7 @@ public class PlayerManager {
                 player.setGameMode(GameMode.ADVENTURE);
                 player.setAllowFlight(true);
                 player.setFlying(true);
+                player.setCollidable(false);
 
                 setType(player, PlayerType.SPECTATOR);
                 setPlayerName(player, PlayerType.SPECTATOR);
@@ -332,6 +400,11 @@ public class PlayerManager {
         Collections.shuffle(playersList);
 
         if (!pickPercentage || numTaggers < 1) {
+            if (playersList.isEmpty()) {
+                plugin.getLogger().warning("PlayerManager.pickPlayers: Tried to pick a random player, but playersList is empty!");
+                return;
+            }
+
             // If pickPercentage is true or there are no taggers based on the percentage, force assign one tagger
             Player randomTagger = playersList.get(new Random().nextInt(playersList.size()));
             taggers.add(randomTagger);

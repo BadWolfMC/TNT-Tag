@@ -70,6 +70,12 @@ public class PlaceholderAPIExpansion extends PlaceholderExpansion {
             return String.valueOf(playerData.getWinstreak());
         }
 
+        if (params.equalsIgnoreCase("team")) {
+            return plugin.getArenaManager().getPlayerArena(player.getPlayer()) == null ?
+                            "N/A" :
+                            plugin.getArenaManager().getPlayerArena(player.getPlayer()).getGameManager().playerManager.getPlayerType(player.getPlayer()).name();
+        }
+
         if (params.startsWith("top_wins_") || params.startsWith("top_timestagged_") || params.startsWith("top_tags_")) {
             String[] parts = params.split("_");
             if (parts.length == 3) {
@@ -113,9 +119,18 @@ public class PlaceholderAPIExpansion extends PlaceholderExpansion {
                 String arenaName = parts[1];
                 String type = parts[2];
 
-                Arena arena = plugin.getArenaManager().getArena(arenaName);
-                if (arena == null) {
-                    return "Invalid arena";
+                Arena arena = null;
+                if (arenaName.equals("current")) {
+                    if (plugin.getArenaManager().playerIsInArena(player.getPlayer())) {
+                        arena = plugin.getArenaManager().getPlayerArena(Bukkit.getPlayer(player.getUniqueId()));
+                    } else {
+                        return "Player not in arena.";
+                    }
+                } else {
+                    arena = plugin.getArenaManager().getArena(arenaName);
+                    if (arena == null) {
+                        return "Invalid arena";
+                    }
                 }
 
                 switch (type) {

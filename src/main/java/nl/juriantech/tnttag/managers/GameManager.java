@@ -27,6 +27,7 @@ public class GameManager {
     public final Arena arena;
     public GameState state = GameState.IDLE;
     public PlayerManager playerManager;
+    public ScoreboardManager scoreboardManager;
     public ItemManager itemManager;
     public StartRunnable startRunnable;
     public Round round;
@@ -35,6 +36,8 @@ public class GameManager {
         this.plugin = plugin;
         this.arena = arena;
         this.playerManager = new PlayerManager(plugin, this);
+        this.playerManager = new PlayerManager(plugin, this);
+        this.scoreboardManager = new ScoreboardManager(plugin, this, Tnttag.scoreboardFile);
         this.itemManager = plugin.getItemManager();
     }
 
@@ -78,10 +81,14 @@ public class GameManager {
 
                 playerManager.sendStartMessage();
                 startRound();
+                scoreboardManager.apply();
                 break;
             case ENDING:
                 this.state = GameState.ENDING;
-                if (round != null) round.end(forceWinForTagger);
+                if (round != null && !round.ended) {
+                    round.end(forceWinForTagger);
+                }
+                scoreboardManager.remove();
 
                 ArrayList<Player> winners = new ArrayList<>();
 
@@ -90,10 +97,21 @@ public class GameManager {
                 for (Map.Entry<Player, PlayerType> entry : playersCopy.entrySet()) {
                         Player player = entry.getKey();
                         if (entry.getValue() == PlayerType.SURVIVOR) {
-                            for (String cmd : Tnttag.configfile.getStringList("arena-finish-commands")) {
-                                ConsoleCommandSender console = Bukkit.getConsoleSender();
-                                Bukkit.dispatchCommand(console, cmd.replace("%winner%", player.getName()));
-                            }
+                            BukkitRunnable bukkitRunnable = new BukkitRunnable() {
+                                @Override
+                                public void run() {
+                                    for (String cmd : Tnttag.configfile.getStringList("arena-finish-commands")) {
+                                        if (!cmd.contains("[PLAYER]")) {
+                                            ConsoleCommandSender console = Bukkit.getConsoleSender();
+                                            Bukkit.dispatchCommand(console, cmd.replace("%winner%", player.getName()));
+                                        } else {
+                                            boolean result = player.performCommand(cmd.replace("[PLAYER]", ""));
+                                        }
+                                    }
+                                }
+                            };
+
+                            bukkitRunnable.runTaskLater(plugin, Tnttag.configfile.getInt("arena-finish-commands-delay") * 20);
 
                             PlayerData playerData = new PlayerData(player.getUniqueId());
                             int oldWins = playerData.getWins();
@@ -142,5 +160,9 @@ public class GameManager {
 
     public boolean isRunning() {
         return this.state == GameState.INGAME;
+    }
+
+    public ScoreboardManager getScoreboardManager() {
+        return scoreboardManager;
     }
 }

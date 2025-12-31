@@ -6,6 +6,7 @@ import dev.dejvokep.boostedyaml.YamlDocument;
 import nl.juriantech.tnttag.api.API;
 import nl.juriantech.tnttag.checkers.UpdateChecker;
 import nl.juriantech.tnttag.handlers.SetupCommandHandler;
+import nl.juriantech.tnttag.hooks.PartiesHook;
 import nl.juriantech.tnttag.hooks.PartyAndFriendsHook;
 import nl.juriantech.tnttag.hooks.PlaceholderAPIExpansion;
 import nl.juriantech.tnttag.hooks.TabHook;
@@ -33,7 +34,7 @@ public class Tnttag extends JavaPlugin {
 
     private final Logger logger = Bukkit.getLogger();
     private ArenaManager arenaManager;
-    public static YamlDocument arenasfile, customizationfile, configfile, playerdatafile, signsdatafile, itemsfile;
+    public static YamlDocument arenasfile, customizationfile, configfile, playerdatafile, signsdatafile, itemsfile, scoreboardFile;
     private UpdateChecker updateChecker;
     private SignManager signManager;
     private InventoryManager inventoryManager;
@@ -46,6 +47,7 @@ public class Tnttag extends JavaPlugin {
     private EntityDamageByEntityListener entityDamageByEntityListener;
     private PlaceholderAPIExpansion placeholderAPIExpansion;
     private JoinSubCommand joinSubCommand;
+    private PartiesHook partiesHook;
 
     @Override
     public void onEnable() {
@@ -85,6 +87,11 @@ public class Tnttag extends JavaPlugin {
             logger.info("[TNT-Tag] TAB detected, enabling the hook.");
             this.tabHook = new TabHook(this);
             logger.info("[TNT-Tag] TAB hooks enabled.");
+        }
+
+        if (getServer().getPluginManager().isPluginEnabled("Parties")) {
+            this.partiesHook = new PartiesHook();
+            System.out.println("[TNT-Tag] Parties hooks enabled.");
         }
 
         api = new API(this);
@@ -133,6 +140,7 @@ public class Tnttag extends JavaPlugin {
         playerdatafile = loadFile("playerdata.yml");
         signsdatafile = loadFile("signs.yml");
         itemsfile = loadFile("items.yml");
+        scoreboardFile = loadFile("scoreboard.yml");
 
         // We use a runnable, so it loads after the worlds.
         new BukkitRunnable() {
@@ -176,6 +184,8 @@ public class Tnttag extends JavaPlugin {
         handler.register(new StatsSubCommand(this));
         handler.register(new TopSubCommand(this));
         handler.register(new RandomJoinSubCommand(this));
+        handler.register(new ForceJoinSubCommand(this));
+        handler.register(new ForceLeaveSubCommand(this));
 
         handler.registerBrigadier();
     }
@@ -284,5 +294,9 @@ public class Tnttag extends JavaPlugin {
 
     public JoinSubCommand getJoinSubCommand() {
         return joinSubCommand;
+    }
+
+    public PartiesHook getPartiesHook() {
+        return partiesHook;
     }
 }

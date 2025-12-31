@@ -5,12 +5,13 @@ round-finish-commands:
   survivors:
   # - eco add %player% 20
 
+arena-finish-commands-delay: 1 #This is in seconds.
 arena-finish-commands:
   #- eco add %winner% 1000
 
 # This will result in:
 # 1. Players instantly joining TNT-Tag once they get into the server.
-# 2. Players being unable to leave TNT-Tag, they will instead be connected to your lobby server once they try to leave.
+# 2. Players being unable to leave TNT-Tag, they will instead be connected to your lobby server when they try to leave.
 
 bungee-mode:
   enabled: false
@@ -63,3 +64,6 @@ delay:
 # If set to false, the global lobby will be skipped. So players will instantly leave the TNT-Tag mode when they want to leave an arena.
 # Players won't be able to join it aswell if this is disabled.
 global-lobby: true
+
+# Don't teleport the player back to their location before joining the lobby.
+skip-location-restoral: false

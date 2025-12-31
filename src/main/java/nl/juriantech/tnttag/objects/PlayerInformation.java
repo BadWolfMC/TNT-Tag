@@ -16,7 +16,8 @@ public class PlayerInformation {
     private final Location oldLocation;
     private final ItemStack[] inventory;
     private final ItemStack[] armor;
-    private final float exp;
+    private final int level; // Store player's level
+    private final int totalExperience; // Store total experience points
     private final GameMode gameMode;
     private final int foodLevel;
     private final String displayName;
@@ -28,11 +29,13 @@ public class PlayerInformation {
         this.oldLocation = player.getLocation();
         this.inventory = player.getInventory().getContents();
         this.armor = player.getInventory().getArmorContents();
-        this.exp = player.getTotalExperience();
+        this.level = player.getLevel();
+        this.totalExperience = player.getTotalExperience();
         this.gameMode = player.getGameMode();
         this.foodLevel = player.getFoodLevel();
         this.displayName = player.getDisplayName();
         this.playerListName = player.getPlayerListName();
+
         if (plugin.getTabHook() != null) {
             tabPrefix = plugin.getTabHook().getPlayerPrefix(player.getUniqueId());
         }
@@ -50,15 +53,15 @@ public class PlayerInformation {
         player.getInventory().clear();
         player.getInventory().setContents(inventory);
         player.getInventory().setArmorContents(armor);
-        player.setExp(exp);
-        player.teleport(oldLocation);
+        player.setTotalExperience(totalExperience);
+        player.setLevel(level);
+
+        if (!Tnttag.configfile.getBoolean("skip-location-restoral")) player.teleport(oldLocation);
+
         player.setGameMode(gameMode);
-        player.teleport(oldLocation);
         player.setFoodLevel(foodLevel);
         player.setDisplayName(displayName);
         player.setPlayerListName(playerListName);
-
-        System.out.println("Restored, exp level vwas: " + exp);
     }
 
     public Player getPlayer() {

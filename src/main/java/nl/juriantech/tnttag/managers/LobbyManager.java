@@ -26,20 +26,20 @@ public class LobbyManager {
         this.playerInformationMap = new HashMap<>();
     }
 
-    public boolean enterLobby(Player player) {
+    public boolean enterLobby(Player player, boolean toggledOn) {
         if (globalLobbyLocation == null) {
             ChatUtils.sendMessage(player, "player.global-lobby-not-set");
             return false;
         }
 
-        player.teleport(globalLobbyLocation);
+        if (toggledOn) player.teleport(globalLobbyLocation);
 
         players.add(player);
         // This should be done first because the PlayerInformation constructor clears the inventory too.
         playerInformationMap.put(player, new PlayerInformation(plugin, player));
         itemManager.giveGlobalLobbyItems(player);
-        ChatUtils.sendMessage(player, "player.joined-lobby");
-        player.playSound(player.getLocation(), Sound.valueOf(ChatUtils.getRaw("sounds.lobby-join").toUpperCase()), 1, 1);
+        if (toggledOn) ChatUtils.sendMessage(player, "player.joined-lobby");
+        if (toggledOn) player.playSound(player.getLocation(), Sound.valueOf(ChatUtils.getRaw("sounds.lobby-join").toUpperCase()), 1, 1);
         return true;
     }
 
@@ -47,9 +47,7 @@ public class LobbyManager {
         itemManager.clearInv(player);
         players.remove(player);
         PlayerInformation playerInfo = playerInformationMap.remove(player);
-        System.out.println("Checking info.");
         if (playerInfo != null) {
-            System.out.println("Found player " + playerInfo.getPlayer().getName() + " info.");
             playerInfo.restore();
         }
         ChatUtils.sendMessage(player, "player.leaved-lobby");
