@@ -6,7 +6,7 @@
 
     <groupId>nl.juriantech</groupId>
     <artifactId>tnttag</artifactId>
-    <version>9.4</version>
+    <version>9.5</version>
     <packaging>jar</packaging>
 
     <name>Tnttag</name>
@@ -132,7 +132,7 @@
         <dependency>
             <groupId>com.github.cryptomorin</groupId>
             <artifactId>XSeries</artifactId>
-            <version>9.2.0</version>
+            <version>13.7.0</version>
         </dependency>
         <dependency>
             <groupId>me.clip</groupId>
