@@ -1,15 +1,17 @@
 package nl.juriantech.tnttag.handlers;
 
+import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import nl.juriantech.tnttag.Arena;
 import nl.juriantech.tnttag.Tnttag;
 import nl.juriantech.tnttag.managers.ArenaManager;
 import nl.juriantech.tnttag.utils.ChatUtils;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
 
 import java.util.ArrayList;
 
@@ -18,127 +20,124 @@ public class SetupCommandHandler implements Listener {
     private final Tnttag plugin;
     private final ArenaManager arenaManager;
     private String currentStep = "";
-    private Player currentPlayer = null;
+    private Player currentPlayer;
     private String arenaName = "";
-    private int minPlayers = 0;
-    private int maxPlayers = 0;
-    private Location lobbyLocation = null;
-    private Location startLocation = null;
+    private int minPlayers;
+    private int maxPlayers;
+    private Location lobbyLocation;
+    private Location startLocation;
 
     public SetupCommandHandler(Tnttag plugin) {
         this.plugin = plugin;
         this.arenaManager = plugin.getArenaManager();
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
+
     public void start(Player player) {
         clearChat(player);
         ChatUtils.sendMessage(player, "setup.start");
         ChatUtils.sendMessage(player, "setup.enter-name");
-
         currentStep = "enter-name";
         currentPlayer = player;
     }
 
     @EventHandler
-    public void onPlayerChat(AsyncPlayerChatEvent event) {
+    public void onPlayerChat(AsyncChatEvent event) {
         Player player = event.getPlayer();
-        String message = event.getMessage();
+        if (currentPlayer == null || !currentPlayer.equals(player)) return;
 
-        if (currentPlayer != null && currentPlayer.equals(player)) {
-            event.setCancelled(true);
+        event.setCancelled(true);
+        String message = PlainTextComponentSerializer.plainText().serialize(event.message()).trim();
+        Runnable handler = () -> handleInput(player, message);
+        if (event.isAsynchronous()) {
+            Bukkit.getScheduler().runTask(plugin, handler);
+        } else {
+            handler.run();
+        }
+    }
 
-            if (message.equals("cancel")) {
-                cancel(player);
-                return;
-            }
+    private void handleInput(Player player, String message) {
+        if (message.equalsIgnoreCase("cancel")) {
+            cancel(player);
+            return;
+        }
 
-            if (currentStep.equals("enter-name")) {
+        switch (currentStep) {
+            case "enter-name" -> {
+                if (message.isBlank() || arenaManager.getArena(message) != null) {
+                    ChatUtils.sendMessage(player, "setup.enter-name");
+                    return;
+                }
                 arenaName = message;
                 clearChat(player);
                 ChatUtils.sendMessage(player, "setup.name-entered");
                 ChatUtils.sendMessage(player, "setup.enter-minPlayers");
                 currentStep = "enter-minPlayers";
-                return;
             }
-
-            if (currentStep.equals("enter-minPlayers")) {
-                int minPlayersInteger;
-                try {
-                    minPlayersInteger = Integer.parseInt(message);
-                } catch (NumberFormatException e) {
-                    ChatUtils.sendMessage(player, "general.invalid-number");
-                    return;
-                }
-                if (minPlayersInteger < 2) {
+            case "enter-minPlayers" -> {
+                Integer parsed = parseInteger(player, message);
+                if (parsed == null) return;
+                if (parsed < 2) {
                     ChatUtils.sendMessage(player, "setup.minPlayers-too-low");
                     return;
                 }
-                minPlayers = minPlayersInteger;
+                minPlayers = parsed;
                 clearChat(player);
                 ChatUtils.sendMessage(player, "setup.minPlayers-entered");
                 ChatUtils.sendMessage(player, "setup.enter-maxPlayers");
                 currentStep = "enter-maxPlayers";
-                return;
             }
-
-            if (currentStep.equals("enter-maxPlayers")) {
-                int maxPlayersInteger;
-                try {
-                    maxPlayersInteger = Integer.parseInt(message);
-                } catch (NumberFormatException e) {
-                    ChatUtils.sendMessage(player, "general.invalid-number");
+            case "enter-maxPlayers" -> {
+                Integer parsed = parseInteger(player, message);
+                if (parsed == null) return;
+                if (parsed <= minPlayers) {
+                    ChatUtils.sendMessage(player, "setup.maxPlayers-too-low");
                     return;
                 }
-                if (maxPlayersInteger <= minPlayers) {
-                    ChatUtils.sendMessage(player, "general.maxPlayers-too-low");
-                    return;
-                }
-
-                maxPlayers = maxPlayersInteger;
+                maxPlayers = parsed;
                 clearChat(player);
                 ChatUtils.sendMessage(player, "setup.maxPlayers-entered");
                 ChatUtils.sendMessage(player, "setup.set-lobbyLocation");
                 currentStep = "set-lobbyLocation";
-                return;
             }
+            case "set-lobbyLocation" -> {
+                if (!message.equalsIgnoreCase("setlobby")) return;
+                lobbyLocation = player.getLocation().clone();
+                clearChat(player);
+                ChatUtils.sendMessage(player, "setup.lobbyLocation-set");
+                ChatUtils.sendMessage(player, "setup.set-startLocation");
+                currentStep = "set-startLocation";
+            }
+            case "set-startLocation" -> {
+                if (!message.equalsIgnoreCase("setstart")) return;
+                startLocation = player.getLocation().clone();
+                clearChat(player);
+                ChatUtils.sendMessage(player, "setup.startLocation-set");
+                createArena(player);
+                HandlerList.unregisterAll(this);
+            }
+            default -> plugin.getLogger().warning("Unknown setup step: " + currentStep);
+        }
+    }
 
-            if (currentStep.equals("set-lobbyLocation")) {
-                if (message.equals("setlobby")) {
-                    lobbyLocation = player.getLocation();
-                    clearChat(player);
-                    ChatUtils.sendMessage(player, "setup.lobbyLocation-set");
-                    ChatUtils.sendMessage(player, "setup.set-startLocation");
-                    currentStep = "set-startLocation";
-                    return;
-                }
-            }
-
-            if (currentStep.equals("set-startLocation")) {
-                if (message.equals("setstart")) {
-                    startLocation = player.getLocation();
-                    clearChat(player);
-                    ChatUtils.sendMessage(player, "setup.startLocation-set");
-                    createArena(player);
-                    // Unregister the event
-                    HandlerList.unregisterAll(this);
-                }
-            }
+    private Integer parseInteger(Player player, String message) {
+        try {
+            return Integer.parseInt(message);
+        } catch (NumberFormatException exception) {
+            ChatUtils.sendMessage(player, "general.invalid-number");
+            return null;
         }
     }
 
     public void cancel(Player player) {
         clearChat(player);
         ChatUtils.sendMessage(player, "setup.cancelled");
-        // Unregister the event
         HandlerList.unregisterAll(this);
     }
 
     public void clearChat(Player player) {
-        int count = 0;
-
-        while (count < 20) {
-            count++;
-            player.sendMessage("");
+        for (int count = 0; count < 20; count++) {
+            player.sendMessage(net.kyori.adventure.text.Component.empty());
         }
     }
 
@@ -149,9 +148,9 @@ public class SetupCommandHandler implements Listener {
         defaultPotionEffects.add("HEALTH_BOOST:1:TAGGERS");
         defaultPotionEffects.add("HEALTH_BOOST:1:SURVIVORS");
 
-        Arena arena = new Arena(plugin, arenaName, startLocation, lobbyLocation, maxPlayers, minPlayers, defaultPotionEffects, 60, 50);
+        Arena arena = new Arena(plugin, arenaName, startLocation, lobbyLocation, maxPlayers, minPlayers,
+                defaultPotionEffects, 60, 50);
         ChatUtils.sendMessage(arena, player, "setup.finished");
-
         arenaManager.saveArenaToFile(arena);
         arenaManager.arenaObjects.add(arena);
     }

@@ -1,7 +1,6 @@
 package nl.juriantech.tnttag.subcommands;
 
 import nl.juriantech.tnttag.Tnttag;
-import nl.juriantech.tnttag.gui.Stats;
 import nl.juriantech.tnttag.gui.TopStats;
 import org.bukkit.entity.Player;
 import revxrsal.commands.annotation.Command;

@@ -9,16 +9,13 @@ import revxrsal.commands.annotation.Command;
 import revxrsal.commands.annotation.Subcommand;
 import revxrsal.commands.bukkit.annotation.CommandPermission;
 
-import java.io.IOException;
 
 @Command({"tnttag", "tt"})
 public class InfoSubCommand {
 
-    private final Tnttag plugin;
     private final ArenaManager arenaManager;
 
     public InfoSubCommand(Tnttag plugin) {
-        this.plugin = plugin;
         this.arenaManager = plugin.getArenaManager();
     }
 

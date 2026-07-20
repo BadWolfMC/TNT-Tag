@@ -10,6 +10,8 @@ import revxrsal.commands.annotation.Optional;
 import revxrsal.commands.annotation.Subcommand;
 import revxrsal.commands.bukkit.annotation.CommandPermission;
 
+import java.util.List;
+
 @Command({"tnttag", "tt"})
 public class ForceJoinSubCommand {
 
@@ -25,43 +27,40 @@ public class ForceJoinSubCommand {
     @CommandPermission("tnttag.forcejoin")
     public void onJoin(Player executor, @Optional String arenaName) {
         if (arenaName == null && !Tnttag.configfile.getBoolean("global-lobby")) {
-            executor.sendMessage(ChatUtils.colorize(Tnttag.customizationfile.getString("general.specify-arena")));
+            ChatUtils.sendConfiguredMessage(executor, "general.specify-arena");
             return;
         }
 
-        Arena arena = null;
-        if (arenaName != null) {
-            arena = arenaManager.getArena(arenaName);
-            if (arena == null) {
-                executor.sendMessage(ChatUtils.colorize(Tnttag.customizationfile.getString("commands.invalid-arena")));
-                return;
-            }
-
-            if (arena.getGameManager().isRunning()) {
-                executor.sendMessage(ChatUtils.colorize(Tnttag.customizationfile.getString("arena.active")));
-                return;
-            }
-
-            if (arena.getGameManager().playerManager.getPlayers().size() + plugin.getServer().getOnlinePlayers().size() >= arena.getMaxPlayers()) {
-                executor.sendMessage(ChatUtils.colorize(Tnttag.customizationfile.getString("arena.full")));
-                return;
-            }
+        Arena arena = arenaName == null ? null : arenaManager.getArena(arenaName);
+        if (arenaName != null && arena == null) {
+            ChatUtils.sendConfiguredMessage(executor, "commands.invalid-arena");
+            return;
+        }
+        if (arena != null && arena.getGameManager().isRunning()) {
+            ChatUtils.sendConfiguredMessage(executor, "arena.active");
+            return;
         }
 
+        List<? extends Player> eligiblePlayers = plugin.getServer().getOnlinePlayers().stream()
+                .filter(target -> !target.hasPermission("tnttag.bypass-forcejoin"))
+                .filter(target -> arena == null || !arenaManager.playerIsInArena(target))
+                .toList();
 
-        // Force join all players online
-        for (Player target : plugin.getServer().getOnlinePlayers()) {
-            if (arenaName == null) {
+        if (arena != null && !arena.getGameManager().playerManager.canAcceptPlayers(eligiblePlayers.size())) {
+            ChatUtils.sendConfiguredMessage(executor, "arena.full");
+            return;
+        }
+
+        for (Player target : eligiblePlayers) {
+            if (arena == null) {
                 if (!plugin.getLobbyManager().playerIsInLobby(target)) {
                     plugin.getLobbyManager().enterLobby(target, true);
                 }
             } else {
-                if (!arenaManager.playerIsInArena(target) && !target.hasPermission("tnttag.bypass-forcejoin")) {
-                    arena.getGameManager().playerManager.addPlayer(target);
-                }
+                arena.getGameManager().playerManager.addPlayerDirect(target);
             }
         }
 
-        executor.sendMessage(ChatUtils.colorize(Tnttag.customizationfile.getString("commands.forcejoin.success")));
+        ChatUtils.sendConfiguredMessage(executor, "commands.forcejoin.success");
     }
 }

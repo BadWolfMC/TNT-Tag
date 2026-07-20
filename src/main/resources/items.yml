@@ -2,29 +2,29 @@
 items:
   join:
     material: "DIAMOND_AXE"
-    display_name: "&bJoin"
-    lore: "&bJoin an arena!"
+    display_name: "<aqua>Join"
+    lore: "<aqua>Join an arena!"
     permission: "tnttag.gui.join"
     command: "tt joingui"
 
   leave:
     material: "BARRIER"
-    display_name: "&cLeave"
-    lore: "&cLeave the arena."
+    display_name: "<red>Leave"
+    lore: "<red>Leave the arena."
     permission: "NONE"
     command: "tt leave"
 
   radar:
     material: "COMPASS"
-    display_name: "&8Radar"
-    lore: "&8Find your enemies!"
+    display_name: "<dark_gray>Radar"
+    lore: "<dark_gray>Find your enemies!"
     permission: "NONE"
     command: "NONE"
 
   tnt:
     material: "TNT"
-    display_name: "&cExplosive!"
-    lore: "&cTag your enemies using this!"
+    display_name: "<red>Explosive!"
+    lore: "<red>Tag your enemies using this!"
     permission: "NONE"
     command: "NONE"
 

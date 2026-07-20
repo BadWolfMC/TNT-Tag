@@ -6,6 +6,7 @@ import nl.juriantech.tnttag.enums.GameState;
 import nl.juriantech.tnttag.enums.PlayerType;
 import nl.juriantech.tnttag.managers.GameManager;
 import nl.juriantech.tnttag.utils.ChatUtils;
+import nl.juriantech.tnttag.utils.RegistryUtils;
 import nl.juriantech.tnttag.utils.ParticleUtils;
 import org.bukkit.*;
 import org.bukkit.command.ConsoleCommandSender;
@@ -35,7 +36,7 @@ public class Round {
         for (Map.Entry<Player, PlayerType> player : gameManager.playerManager.getPlayers().entrySet()) {
             if (player.getValue().equals(PlayerType.SPECTATOR)) continue;
 
-            player.getKey().playSound(player.getKey().getLocation(), Sound.valueOf(ChatUtils.getRaw("sounds.round-start").toUpperCase()), 1, 1);
+            player.getKey().playSound(player.getKey().getLocation(), RegistryUtils.sound(ChatUtils.getRaw("sounds.round-start")), 1, 1);
             ChatUtils.sendTitle(player.getKey(), "titles.round-start", 20L, 20L, 20L);
             if (teleportToStart) player.getKey().teleport(gameManager.arena.getStartLocation());
         }
@@ -90,7 +91,7 @@ public class Round {
         for (Map.Entry<Player, PlayerType> entry : gameManager.playerManager.getPlayers().entrySet()) {
             Player player = entry.getKey();
 
-            player.playSound(player.getLocation(), Sound.valueOf(ChatUtils.getRaw("sounds.round-end").toUpperCase()), 1, 1);
+            player.playSound(player.getLocation(), RegistryUtils.sound(ChatUtils.getRaw("sounds.round-end")), 1, 1);
             ChatUtils.sendTitle(player, "titles.round-end", 20L, 20L, 20L);
             if (entry.getValue() == PlayerType.SPECTATOR) continue; //This should NOT affect spectators.
             if (entry.getValue() == PlayerType.TAGGER) {
@@ -124,7 +125,7 @@ public class Round {
                 Bukkit.dispatchCommand(console, cmd.replace("%player%", player.getName()));
             }
 
-            ParticleUtils.Firework(player.getLocation(), 0);
+            ParticleUtils.firework(player.getLocation(), 0);
         }
         ended = true;
     }
@@ -135,7 +136,7 @@ public class Round {
 
         if (compass != null && nearestPlayer != null && compass.getItemMeta() != null) {
             ItemMeta meta = compass.getItemMeta();
-            meta.setDisplayName((int) player.getLocation().distance(nearestPlayer.getLocation()) + "m");
+            meta.displayName(net.kyori.adventure.text.Component.text((int) player.getLocation().distance(nearestPlayer.getLocation()) + "m"));
             compass.setItemMeta(meta);
             player.setCompassTarget(nearestPlayer.getLocation());
         }

@@ -21,6 +21,7 @@ public class Arena {
         this.name = name;
         this.startLocation = startLocation;
         this.lobbyLocation = lobbyLocation;
+        validateCapacity(minPlayers, maxPlayers);
         this.maxPlayers = maxPlayers;
         this.minPlayers = minPlayers;
         this.potionEffects = potionEffects;
@@ -67,11 +68,24 @@ public class Arena {
     }
 
     public void setMinPlayers(int minPlayers) {
+        validateCapacity(minPlayers, maxPlayers);
         this.minPlayers = minPlayers;
     }
 
     public void setMaxPlayers(int maxPlayers) {
+        validateCapacity(minPlayers, maxPlayers);
         this.maxPlayers = maxPlayers;
+    }
+
+    public static boolean hasValidCapacity(int minPlayers, int maxPlayers) {
+        return minPlayers >= 2 && maxPlayers > minPlayers;
+    }
+
+    private static void validateCapacity(int minPlayers, int maxPlayers) {
+        if (!hasValidCapacity(minPlayers, maxPlayers)) {
+            throw new IllegalArgumentException("Arena capacity must use minPlayers >= 2 and maxPlayers > minPlayers "
+                    + "(min=" + minPlayers + ", max=" + maxPlayers + ")");
+        }
     }
 
     public void setLobbyLocation(Location lobbyLocation) {

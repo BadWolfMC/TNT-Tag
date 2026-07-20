@@ -12,12 +12,13 @@ import nl.juriantech.tnttag.hooks.PartyAndFriendsHook;
 import nl.juriantech.tnttag.objects.PlayerData;
 import nl.juriantech.tnttag.objects.PlayerInformation;
 import nl.juriantech.tnttag.utils.ChatUtils;
+import nl.juriantech.tnttag.utils.RegistryUtils;
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
 
 import java.util.*;
 
@@ -35,101 +36,127 @@ public class PlayerManager {
         this.lobbyManager = plugin.getLobbyManager();
     }
     public synchronized void addPlayer(Player player) {
-        // Already in lobby?
-        if (!lobbyManager.playerIsInLobby(player)) {
-            lobbyManager.enterLobby(player, true);
-        }
+        if (players.containsKey(player) || !canAcceptPlayers(1)) return;
+
+        if (!ensureLobbyState(player, true)) return;
 
         int minPlayers = gameManager.arena.getMinPlayers();
-        int maxPlayers = gameManager.arena.getMaxPlayers();
 
-        // Safety checks
-        if (gameManager.state == GameState.INGAME
-                || gameManager.state == GameState.ENDING
-                || getPlayerCount() >= maxPlayers) return;
-
-        if (players.containsKey(player)) return;
-
-        // === PartyAndFriends Hook ===
         PartyAndFriendsHook pafHook = plugin.getPartyAndFriendsHook();
         if (pafHook != null && pafHook.playerIsInParty(player.getUniqueId())) {
             PlayerParty party = pafHook.getPlayerParty(player.getUniqueId());
-            if (party != null && party.getLeader().getUniqueId().equals(player.getUniqueId())) {
-                List<Player> partyPlayers = pafHook.getPlayersOfParty(party);
-
-                if (players.size() + partyPlayers.size() > maxPlayers) {
-                    ChatUtils.sendMessage(player, "party.too-much-players");
-                    return;
-                }
-
-                // Bulk add instead of recursive calls
-                for (Player partyPlayer : partyPlayers) {
-                    if (!players.containsKey(partyPlayer)) {
-                        internalAddPlayer(partyPlayer, minPlayers);
-                        ChatUtils.sendMessage(partyPlayer, "party.joined-game");
-                    }
-                }
-                return; // Party leader handled -> no double join
-            } else {
+            if (party == null || !party.getLeader().getUniqueId().equals(player.getUniqueId())) {
                 ChatUtils.sendMessage(player, "party.not-the-leader");
                 return;
             }
+
+            List<Player> eligiblePlayers = eligiblePartyPlayers(player, pafHook.getPlayersOfParty(party));
+            if (!canAcceptPlayers(eligiblePlayers.size())) {
+                ChatUtils.sendMessage(player, "party.too-much-players");
+                return;
+            }
+            if (!preparePartyPlayers(eligiblePlayers)) return;
+            for (Player partyPlayer : eligiblePlayers) {
+                internalAddPlayer(partyPlayer, minPlayers);
+                if (!partyPlayer.getUniqueId().equals(player.getUniqueId())) {
+                    ChatUtils.sendMessage(partyPlayer, "party.joined-game");
+                }
+            }
+            return;
         }
 
-        // === Parties Hook ===
         PartiesHook partiesHook = plugin.getPartiesHook();
         if (partiesHook != null) {
             Party party = partiesHook.getPlayerParty(player.getUniqueId());
             if (party != null) {
-                if (party.getLeader().equals(player.getUniqueId())) {
-                    List<Player> partyPlayers = partiesHook.getPlayersOfParty(party);
-
-                    if (players.size() + partyPlayers.size() > maxPlayers) {
-                        ChatUtils.sendMessage(player, "party.too-much-players");
-                        return;
-                    }
-
-                    for (Player partyPlayer : partyPlayers) {
-                        if (!players.containsKey(partyPlayer)) {
-                            internalAddPlayer(partyPlayer, minPlayers);
-                            if (!partyPlayer.getUniqueId().equals(player.getUniqueId())) {
-                                ChatUtils.sendMessage(partyPlayer, "party.joined-game");
-                            }
-                        }
-                    }
-                    return;
-                } else {
+                if (!party.getLeader().equals(player.getUniqueId())) {
                     ChatUtils.sendMessage(player, "party.not-the-leader");
                     return;
                 }
+
+                List<Player> eligiblePlayers = eligiblePartyPlayers(player, partiesHook.getPlayersOfParty(party));
+                if (!canAcceptPlayers(eligiblePlayers.size())) {
+                    ChatUtils.sendMessage(player, "party.too-much-players");
+                    return;
+                }
+                if (!preparePartyPlayers(eligiblePlayers)) return;
+                for (Player partyPlayer : eligiblePlayers) {
+                    internalAddPlayer(partyPlayer, minPlayers);
+                    if (!partyPlayer.getUniqueId().equals(player.getUniqueId())) {
+                        ChatUtils.sendMessage(partyPlayer, "party.joined-game");
+                    }
+                }
+                return;
             }
         }
 
-        // === Normal player join ===
         internalAddPlayer(player, minPlayers);
     }
 
+    /**
+     * Adds exactly one player, bypassing party expansion. Intended for administrative force-join flows.
+     */
+    public synchronized boolean addPlayerDirect(Player player) {
+        if (players.containsKey(player) || !canAcceptPlayers(1)) return false;
+        if (!ensureLobbyState(player, true)) return false;
+
+        internalAddPlayer(player, gameManager.arena.getMinPlayers());
+        return players.containsKey(player);
+    }
+
+    private boolean preparePartyPlayers(Collection<Player> partyPlayers) {
+        for (Player partyPlayer : partyPlayers) {
+            if (!ensureLobbyState(partyPlayer, false)) return false;
+        }
+        return true;
+    }
+
+    private boolean ensureLobbyState(Player player, boolean teleport) {
+        return lobbyManager.playerIsInLobby(player) || lobbyManager.enterLobby(player, teleport);
+    }
+
+    private List<Player> eligiblePartyPlayers(Player leader, Collection<Player> partyPlayers) {
+        LinkedHashSet<Player> candidates = new LinkedHashSet<>();
+        candidates.add(leader);
+        if (partyPlayers != null) candidates.addAll(partyPlayers);
+
+        return candidates.stream()
+                .filter(Objects::nonNull)
+                .filter(Player::isOnline)
+                .filter(partyPlayer -> !players.containsKey(partyPlayer))
+                .filter(partyPlayer -> !plugin.getArenaManager().playerIsInArena(partyPlayer))
+                .toList();
+    }
+
     private void internalAddPlayer(Player player, int minPlayers) {
-        // Fire event
+        // A final centralized guard prevents command, party, or same-tick joins from exceeding capacity.
+        if (players.containsKey(player) || !canAcceptPlayers(1)) return;
+
         PlayerJoinArenaEvent event = new PlayerJoinArenaEvent(player, gameManager.arena.getName());
         Bukkit.getPluginManager().callEvent(event);
-
-        // Register player immediately (lightweight)
         players.put(player, PlayerType.WAITING);
 
-        // Heavy operations delayed to next tick
         Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!players.containsKey(player)) return;
             gameManager.itemManager.giveWaitingItems(player);
             teleportToLobby(player);
             ChatUtils.sendMessage(player, "player.joined-arena");
-            broadcast(ChatUtils.getRaw("arena.player-joined")
-                    .replace("{player}", player.getName()));
+            broadcast(ChatUtils.getRaw("arena.player-joined").replace("{player}", player.getName()));
         });
 
-        // Start game if threshold reached (guard against multiple triggers)
         if (gameManager.state != GameState.STARTING && getPlayerCount() >= minPlayers) {
             gameManager.start();
         }
+    }
+
+    public boolean canAcceptPlayers(int additionalPlayers) {
+        if (additionalPlayers < 0) return false;
+        if (gameManager.state == GameState.INGAME || gameManager.state == GameState.ENDING) return false;
+        return getPlayerCount() + additionalPlayers <= gameManager.arena.getMaxPlayers();
+    }
+
+    public int getAvailableSlots() {
+        return Math.max(0, gameManager.arena.getMaxPlayers() - getPlayerCount());
     }
 
     public synchronized void removePlayer(Player player, boolean message) {
@@ -146,9 +173,8 @@ public class PlayerManager {
             playerData.setWinstreak(0);
         }
 
-        if (plugin.getTabHook() != null) {
-            String prefix = playerInformation.getTabPrefix();
-            plugin.getTabHook().setPlayerPrefix(player.getUniqueId(), prefix);
+        if (plugin.getTabHook() != null && playerInformation != null) {
+            plugin.getTabHook().setPlayerPrefix(player.getUniqueId(), playerInformation.getTabPrefix());
         }
 
         setPlayerType(player, PlayerType.WAITING);
@@ -169,7 +195,7 @@ public class PlayerManager {
             plugin.getLobbyManager().leaveLobby(player);
         }
 
-        if (gameManager.startRunnable != null && !gameManager.startRunnable.isCancelled() && players.size() <= gameManager.arena.getMinPlayers()) {
+        if (gameManager.startRunnable != null && !gameManager.startRunnable.isCancelled() && getPlayerCount() < gameManager.arena.getMinPlayers()) {
             gameManager.startRunnable.cancel();
             broadcast(ChatUtils.getRaw("arena.countdown-stopped").replace("{player}", player.getName()));
             gameManager.setGameState(GameState.IDLE, false);
@@ -234,11 +260,7 @@ public class PlayerManager {
                 setType(player, PlayerType.WAITING);
                 player.teleport(gameManager.arena.getLobbyLocation());
 
-                player.setDisplayName(playerInformation.getDisplayName());
-                player.setPlayerListName(playerInformation.getPlayerListName());
-
-                if (plugin.getTabHook() != null) plugin.getTabHook().setPlayerPrefix(player.getUniqueId(), playerInformation.getTabPrefix());
-                System.out.println("TAB hook - restoring player prefix of " + player.getName() + " to " + playerInformation.getTabPrefix());
+                setPlayerName(player, PlayerType.WAITING);
                 player.setCollidable(true);
                 break;
             case SURVIVOR:
@@ -278,61 +300,51 @@ public class PlayerManager {
 
     private void setPlayerName(Player player, PlayerType playerType) {
         PlayerInformation playerInformation = plugin.getLobbyManager().getPlayerInformationMap().get(player);
-        switch(playerType) {
-            case WAITING:
-                player.setDisplayName(playerInformation.getDisplayName());
-                player.setPlayerListName(playerInformation.getPlayerListName());
-                if (plugin.getTabHook() != null) {
-                    plugin.getTabHook().setPlayerPrefix(player.getUniqueId(), playerInformation.getTabPrefix());
-                }
-                break;
-            case SURVIVOR:
-                String survivorPrefix = ChatUtils.colorize(Tnttag.customizationfile.getString("name-prefixes.survivor")) + " ";
+        if (playerInformation == null) return;
 
-                player.setDisplayName(survivorPrefix + playerInformation.getDisplayName());
-                player.setPlayerListName(survivorPrefix + playerInformation.getPlayerListName());
-                if (plugin.getTabHook() != null) {
-                    plugin.getTabHook().setPlayerPrefix(player.getUniqueId(), survivorPrefix);
-                }
-                break;
-            case TAGGER:
-                String taggerPrefix = ChatUtils.colorize(Tnttag.customizationfile.getString("name-prefixes.tagger")) + " ";
+        if (playerType == PlayerType.WAITING) {
+            player.displayName(playerInformation.getDisplayName());
+            player.playerListName(playerInformation.getPlayerListName());
+            if (plugin.getTabHook() != null) {
+                plugin.getTabHook().setPlayerPrefix(player.getUniqueId(), playerInformation.getTabPrefix());
+            }
+            return;
+        }
 
-                player.setDisplayName(taggerPrefix + playerInformation.getDisplayName());
-                player.setPlayerListName(taggerPrefix + playerInformation.getPlayerListName());
-                if (plugin.getTabHook() != null) {
-                    plugin.getTabHook().setPlayerPrefix(player.getUniqueId(), taggerPrefix);
-                }
-                break;
-            case SPECTATOR:
-                String spectatorPrefix = ChatUtils.colorize(Tnttag.customizationfile.getString("name-prefixes.spectator")) + " ";
+        String configuredPrefix = switch (playerType) {
+            case SURVIVOR -> Tnttag.customizationfile.getString("name-prefixes.survivor");
+            case TAGGER -> Tnttag.customizationfile.getString("name-prefixes.tagger");
+            case SPECTATOR -> Tnttag.customizationfile.getString("name-prefixes.spectator");
+            default -> "";
+        };
+        Component prefix = ChatUtils.component(configuredPrefix).append(Component.space());
+        player.displayName(prefix.append(playerInformation.getDisplayName()));
+        player.playerListName(prefix.append(playerInformation.getPlayerListName()));
 
-                player.setDisplayName(spectatorPrefix + playerInformation.getDisplayName());
-                player.setPlayerListName(spectatorPrefix + playerInformation.getPlayerListName());
-                if (plugin.getTabHook() != null) {
-                    plugin.getTabHook().setPlayerPrefix(player.getUniqueId(), spectatorPrefix);
-                    plugin.getTabHook().hidePlayerName(player.getUniqueId());
-                }
-                break;
+        if (plugin.getTabHook() != null) {
+            plugin.getTabHook().setPlayerPrefix(player.getUniqueId(), ChatUtils.colorize(configuredPrefix) + " ");
+            if (playerType == PlayerType.SPECTATOR) {
+                plugin.getTabHook().hidePlayerName(player.getUniqueId());
+            }
         }
     }
 
     public void broadcast(String message) {
-        message = message.replace("{currentPlayers}", String.valueOf(players.size()));
+        message = message.replace("{currentPlayers}", String.valueOf(getPlayerCount()));
         message = message.replace("{minPlayers}", String.valueOf(gameManager.arena.getMinPlayers()));
         message = message.replace("{maxPlayers}", String.valueOf(gameManager.arena.getMaxPlayers()));
 
         if (message.isEmpty()) return;
 
         for (Player player : players.keySet()) {
-            player.sendMessage(ChatUtils.colorize(message));
+            player.sendMessage(ChatUtils.component(message));
         }
     }
 
     public void sendStartMessage() {
         for (Player player : players.keySet()) {
             for (String line : Tnttag.configfile.getStringList("startMessage")) {
-                player.sendMessage(ChatUtils.colorize(line));
+                player.sendMessage(ChatUtils.component(line));
             }
         }
     }
@@ -361,23 +373,28 @@ public class PlayerManager {
         activeEffects.forEach(activePotionEffect -> player.removePotionEffect(activePotionEffect.getType()));
 
 
-        for (String potionEffect : gameManager.arena.getPotionEffects()) {
-            String[] parts = potionEffect.split(":");
-            if (parts[0] == null || parts[1] == null || parts[2] == null) {
-                Bukkit.getLogger().severe("[TNT-Tag] Some of the potionEffects from arena " + gameManager.arena.getName() + " are misconfigured, the effects are not given.");
-                break;
+        for (String configuredEffect : gameManager.arena.getPotionEffects()) {
+            String[] parts = configuredEffect.split(":", 3);
+            if (parts.length != 3) {
+                plugin.getLogger().severe("Arena '" + gameManager.arena.getName()
+                        + "' has an invalid potion effect entry: " + configuredEffect);
+                continue;
             }
 
-            if (parts[2].equalsIgnoreCase("SURVIVORS")) {
-                if (players.get(player).equals(PlayerType.SURVIVOR)) {
-                    player.addPotionEffect(new PotionEffect(Objects.requireNonNull(PotionEffectType.getByName(parts[0])), 2147483647, Integer.parseInt(parts[1])));
+            try {
+                PotionEffect effect = new PotionEffect(
+                        RegistryUtils.potionEffect(parts[0]),
+                        Integer.MAX_VALUE,
+                        Integer.parseInt(parts[1])
+                );
+                if (parts[2].equalsIgnoreCase("SURVIVORS") && players.get(player) == PlayerType.SURVIVOR) {
+                    player.addPotionEffect(effect);
+                } else if (parts[2].equalsIgnoreCase("TAGGERS") && players.get(player) == PlayerType.TAGGER) {
+                    player.addPotionEffect(effect);
                 }
-            }
-
-            if (parts[2].equalsIgnoreCase("TAGGERS")) {
-                if (players.get(player).equals(PlayerType.TAGGER)) {
-                    player.addPotionEffect(new PotionEffect(Objects.requireNonNull(PotionEffectType.getByName(parts[0])), 2147483647, Integer.parseInt(parts[1])));
-                }
+            } catch (IllegalArgumentException exception) {
+                plugin.getLogger().severe("Arena '" + gameManager.arena.getName()
+                        + "' has an invalid potion effect entry '" + configuredEffect + "': " + exception.getMessage());
             }
         }
     }

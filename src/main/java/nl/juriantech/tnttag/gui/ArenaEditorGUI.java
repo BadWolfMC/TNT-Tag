@@ -1,6 +1,5 @@
 package nl.juriantech.tnttag.gui;
 
-import com.cryptomorin.xseries.XMaterial;
 import io.github.rysefoxx.inventory.plugin.content.IntelligentItem;
 import io.github.rysefoxx.inventory.plugin.content.InventoryContents;
 import io.github.rysefoxx.inventory.plugin.content.InventoryProvider;
@@ -10,6 +9,7 @@ import nl.juriantech.tnttag.Tnttag;
 import nl.juriantech.tnttag.managers.ArenaManager;
 import nl.juriantech.tnttag.utils.ChatUtils;
 import nl.juriantech.tnttag.utils.ItemBuilder;
+import nl.juriantech.tnttag.utils.RegistryUtils;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 
@@ -56,10 +56,14 @@ public class ArenaEditorGUI {
                             open();
                         }));
 
-                        contents.set(10, IntelligentItem.empty(new ItemBuilder(Material.LIGHT_WEIGHTED_PRESSURE_PLATE).displayName("&6Minimum players: " + arena.getMinPlayers()).lore(ChatUtils.getRaw("editor-gui.minPlayersLore")).setAmount(arena.getMinPlayers()).hideAttributes().build()));
+                        contents.set(10, IntelligentItem.empty(new ItemBuilder(Material.LIGHT_WEIGHTED_PRESSURE_PLATE).displayName("<gold>Minimum players: " + arena.getMinPlayers()).lore(ChatUtils.getRaw("editor-gui.minPlayersLore")).setAmount(arena.getMinPlayers()).hideAttributes().build()));
 
                         contents.set(19, IntelligentItem.of(new ItemBuilder(Material.LIME_DYE).displayName(ChatUtils.getRaw("editor-gui.increment")).hideAttributes().build(), event -> {
                             int newAmount = arena.getMinPlayers() + 1;
+                            if (newAmount >= arena.getMaxPlayers()) {
+                                ChatUtils.sendMessage(player, "setup.maxPlayers-too-low");
+                                return;
+                            }
                             arena.setMinPlayers(newAmount);
                             arenaManager.saveArenaToFile(arena);
                             ChatUtils.sendMessage(player, "editor-gui.hint");
@@ -69,8 +73,8 @@ public class ArenaEditorGUI {
                         //maxPlayers
                         contents.set(2, IntelligentItem.of(new ItemBuilder(Material.GRAY_DYE).displayName(ChatUtils.getRaw("editor-gui.decrement")).hideAttributes().build(), event -> {
                             int newAmount = arena.getMaxPlayers() - 1;
-                            if (newAmount <= 0) {
-                                ChatUtils.sendMessage(player, "general.negative-error");
+                            if (newAmount <= arena.getMinPlayers()) {
+                                ChatUtils.sendMessage(player, "setup.maxPlayers-too-low");
                                 return;
                             }
 
@@ -80,7 +84,7 @@ public class ArenaEditorGUI {
                             open();
                         }));
 
-                        contents.set(11, IntelligentItem.empty(new ItemBuilder(Material.HEAVY_WEIGHTED_PRESSURE_PLATE).displayName("&6Maximum players: " + arena.getMaxPlayers()).lore(ChatUtils.getRaw("editor-gui.maxPlayersLore")).setAmount(arena.getMaxPlayers()).hideAttributes().build()));
+                        contents.set(11, IntelligentItem.empty(new ItemBuilder(Material.HEAVY_WEIGHTED_PRESSURE_PLATE).displayName("<gold>Maximum players: " + arena.getMaxPlayers()).lore(ChatUtils.getRaw("editor-gui.maxPlayersLore")).setAmount(arena.getMaxPlayers()).hideAttributes().build()));
 
                         contents.set(20, IntelligentItem.of(new ItemBuilder(Material.LIME_DYE).displayName(ChatUtils.getRaw("editor-gui.increment")).hideAttributes().build(), event -> {
                             int newAmount = arena.getMaxPlayers() + 1;
@@ -91,7 +95,7 @@ public class ArenaEditorGUI {
                         }));
 
                         //lobbyLocation
-                        contents.set(12, IntelligentItem.of(new ItemBuilder(Material.ITEM_FRAME).displayName("&6Lobby location").lore(ChatUtils.getRaw("editor-gui.lobbyLocationLore")).hideAttributes().build(), event -> {
+                        contents.set(12, IntelligentItem.of(new ItemBuilder(Material.ITEM_FRAME).displayName("<gold>Lobby location").lore(ChatUtils.getRaw("editor-gui.lobbyLocationLore")).hideAttributes().build(), event -> {
                             arena.setLobbyLocation(player.getLocation());
                             arenaManager.saveArenaToFile(arena);
                             ChatUtils.sendMessage(player, "editor-gui.hint");
@@ -99,7 +103,7 @@ public class ArenaEditorGUI {
                         }));
 
                         //startLocation
-                        contents.set(13, IntelligentItem.of(new ItemBuilder(Material.BEACON).displayName("&6Start location").lore(ChatUtils.getRaw("editor-gui.startLocationLore")).hideAttributes().build(), event -> {
+                        contents.set(13, IntelligentItem.of(new ItemBuilder(Material.BEACON).displayName("<gold>Start location").lore(ChatUtils.getRaw("editor-gui.startLocationLore")).hideAttributes().build(), event -> {
                             arena.setStartLocation(player.getLocation());
                             arenaManager.saveArenaToFile(arena);
                             ChatUtils.sendMessage(player, "editor-gui.hint");
@@ -124,7 +128,7 @@ public class ArenaEditorGUI {
                             open();
                         }));
 
-                        contents.set(14, IntelligentItem.empty(new ItemBuilder(Material.DAYLIGHT_DETECTOR).displayName("&6Countdown: " + arena.getCountdown()).lore(ChatUtils.getRaw("editor-gui.countdownLore")).setAmount(arena.getCountdown()).hideAttributes().build()));
+                        contents.set(14, IntelligentItem.empty(new ItemBuilder(Material.DAYLIGHT_DETECTOR).displayName("<gold>Countdown: " + arena.getCountdown()).lore(ChatUtils.getRaw("editor-gui.countdownLore")).setAmount(arena.getCountdown()).hideAttributes().build()));
 
                         contents.set(23, IntelligentItem.of(new ItemBuilder(Material.LIME_DYE).displayName(ChatUtils.getRaw("editor-gui.increment")).hideAttributes().build(), event -> {
                             int newAmount = arena.getCountdown() + 1;
@@ -155,7 +159,7 @@ public class ArenaEditorGUI {
                             open();
                         }));
 
-                        contents.set(15, IntelligentItem.empty(new ItemBuilder(Material.HOPPER).displayName("&6RoundDuration: " + arena.getRoundDuration()).lore(ChatUtils.getRaw("editor-gui.roundDurationLore")).setAmount(arena.getRoundDuration()).hideAttributes().build()));
+                        contents.set(15, IntelligentItem.empty(new ItemBuilder(Material.HOPPER).displayName("<gold>Round duration: " + arena.getRoundDuration()).lore(ChatUtils.getRaw("editor-gui.roundDurationLore")).setAmount(arena.getRoundDuration()).hideAttributes().build()));
 
                         contents.set(24, IntelligentItem.of(new ItemBuilder(Material.LIME_DYE).displayName(ChatUtils.getRaw("editor-gui.increment")).hideAttributes().build(), event -> {
                             int newAmount = arena.getRoundDuration() + 1;
@@ -170,7 +174,7 @@ public class ArenaEditorGUI {
                         }));
 
                         //apply button to apply the changes
-                        contents.set(16, IntelligentItem.of(new ItemBuilder(Material.LEVER).displayName("&6Apply changes").build(), event -> {
+                        contents.set(16, IntelligentItem.of(new ItemBuilder(Material.LEVER).displayName("<gold>Apply changes").build(), event -> {
                             try {
                                 arenaManager.reload();
                             } catch (IOException e) {
@@ -180,7 +184,7 @@ public class ArenaEditorGUI {
                             player.closeInventory();
                         }));
 
-                        contents.fillEmpty(new ItemBuilder(XMaterial.valueOf(ChatUtils.getRaw("editor-gui.emptySlotMaterial")).parseMaterial()).build());
+                        contents.fillEmpty(new ItemBuilder(RegistryUtils.material(ChatUtils.getRaw("editor-gui.emptySlotMaterial"))).build());
                     }
                 })
                 .build(plugin);

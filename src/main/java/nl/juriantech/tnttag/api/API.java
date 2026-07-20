@@ -4,6 +4,7 @@ import nl.juriantech.tnttag.Tnttag;
 import nl.juriantech.tnttag.enums.PlayerType;
 import nl.juriantech.tnttag.managers.ArenaManager;
 import nl.juriantech.tnttag.objects.PlayerData;
+import nl.juriantech.tnttag.utils.ChatUtils;
 import org.bukkit.entity.Player;
 
 import java.util.HashMap;
@@ -61,7 +62,7 @@ public class API {
 
     public String getArenaState(String arenaName) {
         if (arenaExists(arenaName)) {
-            return arenaManager.getArena(arenaName).getGameManager().getCustomizedState();
+            return ChatUtils.colorize(arenaManager.getArena(arenaName).getGameManager().getCustomizedState());
         }
         return "Unknown arena";
     }

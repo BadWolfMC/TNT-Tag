@@ -51,7 +51,7 @@ public class TabHook {
             return null; // not ready yet
         }
 
-        return tabAPI.getNameTagManager().getOriginalPrefix(tabPlayer);
+        return tabAPI.getNameTagManager().getOriginalReplacedPrefix(tabPlayer);
     }
 
 }

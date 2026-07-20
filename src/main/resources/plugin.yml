@@ -1,7 +1,8 @@
-name: Tnttag
-version: 9.5
+name: TNT-Tag
+version: '${project.version}'
 main: nl.juriantech.tnttag.Tnttag
 softdepend: [PlaceholderAPI, PartyAndFriends, TAB, Parties]
-api-version: 1.13
-authors: [ JasperTheDev ]
-description: A TNT-Tag minigame!
+api-version: "26.1"
+authors: [JasperTheDev, BadWolfMC]
+website: https://github.com/BadWolfMC/TNT-Tag
+description: A TNT-Tag minigame for Paper.

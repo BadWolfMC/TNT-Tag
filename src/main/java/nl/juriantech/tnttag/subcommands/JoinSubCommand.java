@@ -25,7 +25,7 @@ public class JoinSubCommand {
     @CommandPermission("tnttag.join")
     public void onJoin(Player player, @Optional String arenaName) {
         if (arenaName == null && !Tnttag.configfile.getBoolean("global-lobby")) {
-            player.sendMessage(ChatUtils.colorize(Tnttag.customizationfile.getString("general.specify-arena")));
+            ChatUtils.sendConfiguredMessage(player, "general.specify-arena");
             return;
         }
 
@@ -36,27 +36,26 @@ public class JoinSubCommand {
             return;
         }
 
-        if (arenaName != null) {
-            if (arenaManager.playerIsInArena(player)) {
-                ChatUtils.sendMessage(player, "player.already-in-game");
-                return;
-            }
-
-            Arena arena = arenaManager.getArena(arenaName);
-            if (arena == null) {
-                ChatUtils.sendMessage(player, "commands.invalid-arena");
-                return;
-            }
-
-            if (!arena.getGameManager().isRunning()) {
-                if (arena.getGameManager().playerManager.getPlayers().size() < arena.getMaxPlayers()) {
-                    arena.getGameManager().playerManager.addPlayer(player);
-                } else {
-                    ChatUtils.sendMessage(player, "arena.full");
-                }
-            } else {
-                ChatUtils.sendMessage(player, "arena.active");
-            }
+        if (arenaName == null) return;
+        if (arenaManager.playerIsInArena(player)) {
+            ChatUtils.sendMessage(player, "player.already-in-game");
+            return;
         }
+
+        Arena arena = arenaManager.getArena(arenaName);
+        if (arena == null) {
+            ChatUtils.sendMessage(player, "commands.invalid-arena");
+            return;
+        }
+        if (arena.getGameManager().isRunning()) {
+            ChatUtils.sendMessage(player, "arena.active");
+            return;
+        }
+        if (!arena.getGameManager().playerManager.canAcceptPlayers(1)) {
+            ChatUtils.sendMessage(player, "arena.full");
+            return;
+        }
+
+        arena.getGameManager().playerManager.addPlayer(player);
     }
 }

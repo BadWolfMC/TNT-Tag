@@ -1,6 +1,5 @@
 package nl.juriantech.tnttag.gui;
 
-import com.cryptomorin.xseries.XMaterial;
 import io.github.rysefoxx.inventory.plugin.content.IntelligentItem;
 import io.github.rysefoxx.inventory.plugin.content.InventoryContents;
 import io.github.rysefoxx.inventory.plugin.content.InventoryProvider;
@@ -10,6 +9,7 @@ import nl.juriantech.tnttag.Tnttag;
 import nl.juriantech.tnttag.managers.ArenaManager;
 import nl.juriantech.tnttag.utils.ChatUtils;
 import nl.juriantech.tnttag.utils.ItemBuilder;
+import nl.juriantech.tnttag.utils.RegistryUtils;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
@@ -38,14 +38,14 @@ public class ArenaSelector {
                     public void init(Player player, InventoryContents contents) {
                         int slot = 0;
                         for (Arena arena : arenaObjects) {
-                            String displayName = ChatUtils.colorize(ChatUtils.getRaw("join-gui.arenaTitle").replace("{name}", arena.getName()).replace("{state}", arena.getGameManager().state.toString()).replace("{current_players}", String.valueOf(arena.getGameManager().playerManager.getPlayerCount())));
-                            contents.set(slot, IntelligentItem.of(new ItemBuilder(XMaterial.valueOf(ChatUtils.getRaw("join-gui.arenaMaterial")).parseMaterial()).displayName(displayName).lore(ChatUtils.getRaw("join-gui.arenaLore")).hideAttributes().build(), event -> {
+                            String displayName = ChatUtils.colorize(ChatUtils.getRaw("join-gui.arenaTitle").replace("{name}", arena.getName()).replace("{state}", arena.getGameManager().getCustomizedState()).replace("{current_players}", String.valueOf(arena.getGameManager().playerManager.getPlayerCount())));
+                            contents.set(slot, IntelligentItem.of(new ItemBuilder(RegistryUtils.material(ChatUtils.getRaw("join-gui.arenaMaterial"))).displayName(displayName).lore(ChatUtils.getRaw("join-gui.arenaLore")).hideAttributes().build(), event -> {
                                 plugin.getJoinSubCommand().onJoin(player, arena.getName());
                                 player.closeInventory();
                             }));
                             slot++;
                         }
-                        contents.fillEmpty(new ItemBuilder(XMaterial.valueOf(ChatUtils.getRaw("join-gui.emptySlotMaterial")).parseMaterial()).build());
+                        contents.fillEmpty(new ItemBuilder(RegistryUtils.material(ChatUtils.getRaw("join-gui.emptySlotMaterial"))).build());
                     }
                 })
                 .build(plugin);

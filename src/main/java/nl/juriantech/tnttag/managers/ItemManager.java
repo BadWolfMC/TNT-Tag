@@ -1,9 +1,9 @@
 package nl.juriantech.tnttag.managers;
 
-import com.cryptomorin.xseries.XMaterial;
 import nl.juriantech.tnttag.Tnttag;
 import nl.juriantech.tnttag.objects.InventoryItem;
 import nl.juriantech.tnttag.utils.ItemBuilder;
+import nl.juriantech.tnttag.utils.RegistryUtils;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -74,7 +74,7 @@ public class ItemManager {
             if (route.startsWith("items.") && route.substring("items.".length()).indexOf('.') == -1) {
                 String name = route.replace("items.", "");
                 if (getItemByName(name) == null) {
-                    InventoryItem inventoryItem = new InventoryItem(name, new ItemBuilder(XMaterial.valueOf(Tnttag.itemsfile.getString(route + ".material")).parseMaterial()).displayName(Tnttag.itemsfile.getString(route + ".display_name")).lore(Tnttag.itemsfile.getString(route + ".lore")).build(), Tnttag.itemsfile.getString(route + ".permission"), Tnttag.itemsfile.getString(route + ".command"));
+                    InventoryItem inventoryItem = new InventoryItem(name, new ItemBuilder(RegistryUtils.material(Tnttag.itemsfile.getString(route + ".material"))).displayName(Tnttag.itemsfile.getString(route + ".display_name")).lore(Tnttag.itemsfile.getString(route + ".lore")).build(), Tnttag.itemsfile.getString(route + ".permission"), Tnttag.itemsfile.getString(route + ".command"));
                     items.add(inventoryItem);
                 }
             }

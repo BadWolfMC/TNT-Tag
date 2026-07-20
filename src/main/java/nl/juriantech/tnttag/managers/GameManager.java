@@ -105,7 +105,7 @@ public class GameManager {
                                             ConsoleCommandSender console = Bukkit.getConsoleSender();
                                             Bukkit.dispatchCommand(console, cmd.replace("%winner%", player.getName()));
                                         } else {
-                                            boolean result = player.performCommand(cmd.replace("[PLAYER]", ""));
+                                            player.performCommand(cmd.replace("[PLAYER]", ""));
                                         }
                                     }
                                 }
@@ -118,7 +118,7 @@ public class GameManager {
                             playerData.setWins(oldWins + 1);
                             playerData.setWinstreak(playerData.getWinstreak() + 1);
 
-                            ParticleUtils.Firework(player.getLocation(), 0);
+                            ParticleUtils.firework(player.getLocation(), 0);
                             playerManager.broadcast(ChatUtils.getRaw("arena.player-win").replace("{player}", player.getName()));
                             playerManager.broadcast(ChatUtils.getRaw("arena.returning-to-lobby").replace("%seconds%", String.valueOf(Tnttag.configfile.getInt("delay.after-game"))));
                             ChatUtils.sendTitle(player, "titles.win", 20L, 20L, 20L);
@@ -155,7 +155,7 @@ public class GameManager {
     }
 
     public String getCustomizedState() {
-        return ChatUtils.colorize(ChatUtils.getRaw("state." + state.toString().toUpperCase()));
+        return ChatUtils.getRaw("state." + state.toString().toUpperCase());
     }
 
     public boolean isRunning() {
