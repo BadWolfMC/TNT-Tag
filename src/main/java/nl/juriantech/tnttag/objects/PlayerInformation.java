@@ -1,5 +1,6 @@
 package nl.juriantech.tnttag.objects;
 
+import net.kyori.adventure.text.Component;
 import nl.juriantech.tnttag.Tnttag;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -16,25 +17,26 @@ public class PlayerInformation {
     private final Location oldLocation;
     private final ItemStack[] inventory;
     private final ItemStack[] armor;
-    private final int level; // Store player's level
-    private final int totalExperience; // Store total experience points
+    private final int level;
+    private final int totalExperience;
     private final GameMode gameMode;
     private final int foodLevel;
-    private final String displayName;
-    private final String playerListName;
+    private final Component displayName;
+    private final Component playerListName;
     private String tabPrefix;
 
     public PlayerInformation(Tnttag plugin, Player player) {
         this.player = player;
-        this.oldLocation = player.getLocation();
+        this.oldLocation = player.getLocation().clone();
         this.inventory = player.getInventory().getContents();
         this.armor = player.getInventory().getArmorContents();
         this.level = player.getLevel();
         this.totalExperience = player.getTotalExperience();
         this.gameMode = player.getGameMode();
         this.foodLevel = player.getFoodLevel();
-        this.displayName = player.getDisplayName();
-        this.playerListName = player.getPlayerListName();
+        this.displayName = player.displayName();
+        Component currentListName = player.playerListName();
+        this.playerListName = currentListName == null ? Component.text(player.getName()) : currentListName;
 
         if (plugin.getTabHook() != null) {
             tabPrefix = plugin.getTabHook().getPlayerPrefix(player.getUniqueId());
@@ -48,7 +50,7 @@ public class PlayerInformation {
 
     public void restore() {
         List<PotionEffect> activeEffects = new ArrayList<>(player.getActivePotionEffects());
-        activeEffects.forEach(activePotionEffect -> player.removePotionEffect(activePotionEffect.getType()));
+        activeEffects.forEach(effect -> player.removePotionEffect(effect.getType()));
 
         player.getInventory().clear();
         player.getInventory().setContents(inventory);
@@ -60,19 +62,19 @@ public class PlayerInformation {
 
         player.setGameMode(gameMode);
         player.setFoodLevel(foodLevel);
-        player.setDisplayName(displayName);
-        player.setPlayerListName(playerListName);
+        player.displayName(displayName);
+        player.playerListName(playerListName);
     }
 
     public Player getPlayer() {
         return player;
     }
 
-    public String getDisplayName() {
+    public Component getDisplayName() {
         return displayName;
     }
 
-    public String getPlayerListName() {
+    public Component getPlayerListName() {
         return playerListName;
     }
 

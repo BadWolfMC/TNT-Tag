@@ -8,12 +8,16 @@ import nl.juriantech.tnttag.utils.ChatUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.block.Block;
 import org.bukkit.block.Sign;
+import org.bukkit.block.sign.Side;
 import org.bukkit.entity.Player;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.TreeMap;
+import java.util.UUID;
 
 public class TopSign implements SignInterface {
 
@@ -27,83 +31,60 @@ public class TopSign implements SignInterface {
         this.loc = loc;
         this.position = position;
         this.statType = statType;
-
         this.signLines = Tnttag.customizationfile.getStringList("top-sign.lines");
-        this.formattedStatType = Tnttag.customizationfile.getString("top-sign.types." + statType.toString());
+        this.formattedStatType = Tnttag.customizationfile.getString("top-sign.types." + statType);
     }
 
     @Override
     public void onClick(Player player) {
-        //Nothing here!
+        // Informational sign only.
     }
 
     @Override
     public void update() {
-        if (loc == null) return;
+        if (loc == null || !(loc.getBlock().getState() instanceof Sign sign) || signLines.size() < 4) return;
 
-        Block block = loc.getBlock();
-        if (!(block.getState() instanceof Sign)) return;
-
-        Sign sign = (Sign) block.getState();
         API api = Tnttag.getAPI();
-        TreeMap<UUID, Integer> data;
+        TreeMap<UUID, Integer> data = switch (statType) {
+            case WINS -> api.getWinsData();
+            case TIMESTAGGED -> api.getTimesTaggedData();
+            case TAGS -> api.getTagsData();
+        };
 
-        switch (statType) {
-            case WINS:
-                data = api.getWinsData();
-                break;
-            case TIMESTAGGED:
-                data = api.getTimesTaggedData();
-                break;
-            case TAGS:
-                data = api.getTagsData();
-                break;
-            default:
-                return;
-        }
-
-        List<Map.Entry<UUID, Integer>> topTenPlayers = data.entrySet().stream()
+        List<Map.Entry<UUID, Integer>> topPlayers = data.entrySet().stream()
                 .sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
                 .limit(10)
-                .collect(Collectors.toList());
+                .toList();
 
         String playerName = Tnttag.customizationfile.getString("top-sign.no-data");
-
-        if (!topTenPlayers.isEmpty()) {
-            OfflinePlayer player = Bukkit.getOfflinePlayer(topTenPlayers.get(position - 1).getKey()); //array is zero based
-
-            if (player.getName() != null) {
-                playerName = player.getName();
-            }
+        if (position <= topPlayers.size()) {
+            OfflinePlayer player = Bukkit.getOfflinePlayer(topPlayers.get(position - 1).getKey());
+            if (player.getName() != null) playerName = player.getName();
         }
 
-        for (int i = 0; i <= 3; i++) {
-            sign.setLine(i, ChatUtils.colorize(signLines.get(i)
+        for (int i = 0; i < 4; i++) {
+            String line = signLines.get(i)
                     .replace("{top_type}", formattedStatType)
                     .replace("{top_position}", String.valueOf(position))
-                    .replace("{player}", playerName)));
+                    .replace("{player}", playerName);
+            sign.getSide(Side.FRONT).line(i, ChatUtils.component(line));
         }
-
         sign.update(true);
     }
 
     @Override
     public String toString() {
-        return SimpleLocation.fromLocation(loc) + ";" + position + ";" + statType.toString();
+        return SimpleLocation.fromLocation(loc) + ";" + position + ";" + statType;
     }
 
     public static TopSign fromString(String str) {
-        String[] parts = str.split(";");
+        String[] parts = str.split(";", 3);
+        if (parts.length != 3) return null;
 
-        if (parts.length == 3) {
-            Location location = Objects.requireNonNull(SimpleLocation.fromString(parts[0])).toLocation();
-            int position = Integer.parseInt(parts[1]);
-            StatType statType = StatType.valueOf(parts[2]);
-
-            return new TopSign(location, position, statType);
-        }
-
-        return null;
+        Location location = Objects.requireNonNull(SimpleLocation.fromString(parts[0])).toLocation();
+        int position = Integer.parseInt(parts[1]);
+        StatType statType = StatType.valueOf(parts[2]);
+        return new TopSign(location, position, statType);
     }
 
     @Override

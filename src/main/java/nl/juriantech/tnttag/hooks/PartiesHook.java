@@ -14,7 +14,6 @@ public class PartiesHook {
 
     public Party getPlayerParty(UUID playerUUID) {
         PartiesAPI api = Parties.getApi();
-        String partyDescription = null;
         PartyPlayer player = api.getPartyPlayer(playerUUID);
         if (player.isInParty()) {
             return api.getParty(player.getPartyId());
@@ -25,8 +24,9 @@ public class PartiesHook {
 
     public ArrayList<Player> getPlayersOfParty(Party party) {
         ArrayList<Player> players = new ArrayList<>();
-        for (PartyPlayer player : party.getOnlineMembers()) {
-            players.add(Bukkit.getPlayer(player.getPlayerUUID()));
+        for (PartyPlayer partyPlayer : party.getOnlineMembers()) {
+            Player player = Bukkit.getPlayer(partyPlayer.getPlayerUUID());
+            if (player != null) players.add(player);
         }
         return players;
     }

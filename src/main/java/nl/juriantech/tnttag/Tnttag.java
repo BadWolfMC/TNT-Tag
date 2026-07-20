@@ -5,7 +5,6 @@ import com.google.common.io.ByteStreams;
 import dev.dejvokep.boostedyaml.YamlDocument;
 import nl.juriantech.tnttag.api.API;
 import nl.juriantech.tnttag.checkers.UpdateChecker;
-import nl.juriantech.tnttag.handlers.SetupCommandHandler;
 import nl.juriantech.tnttag.hooks.PartiesHook;
 import nl.juriantech.tnttag.hooks.PartyAndFriendsHook;
 import nl.juriantech.tnttag.hooks.PlaceholderAPIExpansion;
@@ -27,8 +26,6 @@ import revxrsal.commands.exception.CommandErrorException;
 import java.io.File;
 import java.io.IOException;
 import java.util.logging.Logger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class Tnttag extends JavaPlugin {
 
@@ -51,17 +48,6 @@ public class Tnttag extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        String version = Bukkit.getVersion();
-        String minecraftVersion = getMinecraftVersion(version);
-
-        // Check if the server version is 1.12.2 or below
-        if (minecraftVersion != null && isVersionBefore("1.12.3", minecraftVersion)) {
-            getLogger().severe("TNT-Tag is not compatible with Minecraft 1.12.2 or lower and you're running " + minecraftVersion + ". Disabling...");
-            getServer().getPluginManager().disablePlugin(this);
-            return;
-        }
-
-        new SetupCommandHandler(this);
         updateChecker = new UpdateChecker(this);
         updateChecker.check();
         files();
@@ -91,7 +77,7 @@ public class Tnttag extends JavaPlugin {
 
         if (getServer().getPluginManager().isPluginEnabled("Parties")) {
             this.partiesHook = new PartiesHook();
-            System.out.println("[TNT-Tag] Parties hooks enabled.");
+            logger.info("[TNT-Tag] Parties hooks enabled.");
         }
 
         api = new API(this);
@@ -213,35 +199,6 @@ public class Tnttag extends JavaPlugin {
         signManager.saveSigns();
         arenaManager.saveArenasToFile();
         logger.severe("TNT-Tag has been disabled!");
-    }
-
-    // Helper method to extract Minecraft version from version string
-    private String getMinecraftVersion(String versionString) {
-        Pattern pattern = Pattern.compile("MC: (\\d+\\.\\d+\\.\\d+)");
-        Matcher matcher = pattern.matcher(versionString);
-        if (matcher.find()) {
-            return matcher.group(1);
-        }
-        return null;
-    }
-
-    private boolean isVersionBefore(String targetVersion, String currentVersion) {
-        String[] targetParts = targetVersion.split("\\.");
-        String[] currentParts = currentVersion.split("\\.");
-
-        for (int i = 0; i < targetParts.length && i < currentParts.length; i++) {
-            int targetPart = Integer.parseInt(targetParts[i]);
-            int currentPart = Integer.parseInt(currentParts[i]);
-
-            if (currentPart < targetPart) {
-                return true;
-            } else if (currentPart > targetPart) {
-                return false;
-            }
-            // If the parts are equal, continue to the next part
-        }
-
-        return false; // The versions are equal or the current version is greater
     }
 
     public void connectToServer(Player player, String serverName) {

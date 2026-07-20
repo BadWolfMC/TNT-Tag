@@ -5,7 +5,8 @@ import nl.juriantech.tnttag.Tnttag;
 import nl.juriantech.tnttag.objects.SimpleLocation;
 import nl.juriantech.tnttag.utils.ChatUtils;
 import org.bukkit.Location;
-import org.bukkit.block.Block;
+import org.bukkit.block.Sign;
+import org.bukkit.block.sign.Side;
 import org.bukkit.entity.Player;
 
 import java.util.List;
@@ -22,7 +23,6 @@ public class JoinSign implements SignInterface {
         this.plugin = plugin;
         this.arena = arena;
         this.loc = loc;
-
         this.signLines = Tnttag.customizationfile.getStringList("join-sign.lines");
     }
 
@@ -34,31 +34,22 @@ public class JoinSign implements SignInterface {
 
     @Override
     public void update() {
-        if (loc == null) return;
+        if (loc == null || !(loc.getBlock().getState() instanceof Sign sign)) return;
 
-        Block block = loc.getBlock();
-        if (!(block.getState() instanceof org.bukkit.block.Sign)) return;
+        Arena arenaObject = plugin.getArenaManager().getArena(arena);
+        if (arenaObject == null || signLines.size() < 4) return;
 
-        org.bukkit.block.Sign sign = (org.bukkit.block.Sign) block.getState();
-        Arena arena = plugin.getArenaManager().getArena(this.arena);
-        if (arena == null) {
-            return;
+        int currentPlayers = arenaObject.getGameManager().playerManager.getPlayerCount();
+        int maxPlayers = arenaObject.getMaxPlayers();
+
+        for (int i = 0; i < 4; i++) {
+            String line = signLines.get(i)
+                    .replace("{arena}", arena)
+                    .replace("{state}", arenaObject.getGameManager().getCustomizedState())
+                    .replace("{current_players}", String.valueOf(currentPlayers))
+                    .replace("{max_players}", String.valueOf(maxPlayers));
+            sign.getSide(Side.FRONT).line(i, ChatUtils.component(line));
         }
-
-        int currentPlayers = arena.getGameManager().playerManager.getPlayerCount();
-        int maxPlayers = arena.getMaxPlayers();
-
-        for (int i = 0; i <= 3; i++) {
-            sign.setLine(i, ChatUtils.colorize(
-                    signLines.get(i)
-                            .replace("{arena}", this.arena)
-                            .replace("{state}", arena.getGameManager().getCustomizedState())
-                            .replace("{current_players}", String.valueOf(currentPlayers))
-                            .replace("{max_players}", String.valueOf(maxPlayers))
-                    )
-            );
-        }
-
         sign.update(true);
     }
 
@@ -68,15 +59,11 @@ public class JoinSign implements SignInterface {
     }
 
     public static JoinSign fromString(Tnttag plugin, String str) {
-        String[] parts = str.split(";");
+        String[] parts = str.split(";", 2);
+        if (parts.length != 2) return null;
 
-        if (parts.length == 2) {
-            String arena = parts[0];
-            Location location = Objects.requireNonNull(SimpleLocation.fromString(parts[1])).toLocation();
-            return new JoinSign(plugin, arena, location);
-        }
-
-        return null;
+        Location location = Objects.requireNonNull(SimpleLocation.fromString(parts[1])).toLocation();
+        return new JoinSign(plugin, parts[0], location);
     }
 
     @Override

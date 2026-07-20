@@ -1,14 +1,13 @@
 package nl.juriantech.tnttag.gui;
 
-import com.cryptomorin.xseries.XMaterial;
 import io.github.rysefoxx.inventory.plugin.content.IntelligentItem;
 import io.github.rysefoxx.inventory.plugin.content.InventoryContents;
 import io.github.rysefoxx.inventory.plugin.content.InventoryProvider;
 import io.github.rysefoxx.inventory.plugin.pagination.RyseInventory;
 import nl.juriantech.tnttag.Tnttag;
-import nl.juriantech.tnttag.objects.PlayerData;
 import nl.juriantech.tnttag.utils.ChatUtils;
 import nl.juriantech.tnttag.utils.ItemBuilder;
+import nl.juriantech.tnttag.utils.RegistryUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -30,7 +29,6 @@ public class TopStats {
     }
 
     public void open() {
-        PlayerData playerData = new PlayerData(player.getUniqueId());
         Map<UUID, Integer> topData;
         String topMessage;
         switch (type) {
@@ -70,9 +68,9 @@ public class TopStats {
                         topThreePlayers.forEach(entry -> {
                             UUID playerId = entry.getKey();
                             int playerStat = entry.getValue();
-                            contents.set(position.getAndIncrement(), IntelligentItem.empty(new ItemBuilder(Material.PLAYER_HEAD).setSkullOwner(playerId.toString()).displayName(ChatUtils.colorize("&b" + Bukkit.getOfflinePlayer(playerId).getName() + "&6 - &b" + playerStat)).build()));
+                            contents.set(position.getAndIncrement(), IntelligentItem.empty(new ItemBuilder(Material.PLAYER_HEAD).setSkullOwner(playerId.toString()).displayName("<aqua>" + Bukkit.getOfflinePlayer(playerId).getName() + "<gold> - <aqua>" + playerStat).build()));
                         });
-                        contents.fillEmpty(new ItemBuilder(XMaterial.valueOf(ChatUtils.getRaw("top-gui.emptySlotMaterial")).parseMaterial()).build());
+                        contents.fillEmpty(new ItemBuilder(RegistryUtils.material(ChatUtils.getRaw("top-gui.emptySlotMaterial"))).build());
                     }
                 })
                 .build(plugin);

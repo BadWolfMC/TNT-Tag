@@ -6,7 +6,6 @@ import nl.juriantech.tnttag.managers.ArenaManager;
 import nl.juriantech.tnttag.utils.ChatUtils;
 import org.bukkit.entity.Player;
 import revxrsal.commands.annotation.Command;
-import revxrsal.commands.annotation.Optional;
 import revxrsal.commands.annotation.Subcommand;
 import revxrsal.commands.bukkit.annotation.CommandPermission;
 
@@ -33,12 +32,11 @@ public class RandomJoinSubCommand {
             return;
         }
 
-        for (Arena randomArena : arenaManager.getArenaObjects()) {
-            if (!randomArena.getGameManager().isRunning()) {
-                if (randomArena.getGameManager().playerManager.getPlayers().size() < randomArena.getMaxPlayers()) {
-                    randomArena.getGameManager().playerManager.addPlayer(player);
-                    return;
-                }
+        for (Arena arena : arenaManager.getArenaObjects()) {
+            if (!arena.getGameManager().isRunning()
+                    && arena.getGameManager().playerManager.canAcceptPlayers(1)) {
+                arena.getGameManager().playerManager.addPlayer(player);
+                return;
             }
         }
 

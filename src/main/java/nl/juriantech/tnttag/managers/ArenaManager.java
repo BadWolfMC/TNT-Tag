@@ -81,7 +81,6 @@ public class ArenaManager {
         }
         if (!arenaObjects.isEmpty()) arenaObjects.clear();
         for (String route : arenasFile.getRoutesAsStrings(false)) {
-            arenas++;
             String startLocWorldName = arenasFile.getString(route + ".startLocation.world");
             World startLocWorld = Bukkit.getWorld(startLocWorldName);
             if (startLocWorld == null) {
@@ -109,12 +108,19 @@ public class ArenaManager {
             int roundDuration = arenasFile.getInt(route + ".roundDuration");
             int countdown = arenasFile.getInt(route + ".countdown");
 
+            if (!Arena.hasValidCapacity(minPlayers, maxPlayers)) {
+                plugin.getLogger().severe("Arena '" + route + "' has an invalid capacity (minPlayers="
+                        + minPlayers + ", maxPlayers=" + maxPlayers + "). The arena was not loaded.");
+                continue;
+            }
+
             List<String> potionEffects = arenasFile.getStringList(route + ".potionEffects");
 
             if (getArena(route) == null) {
-                Arena arena = new Arena(plugin, route, startLoc, lobbyLoc, maxPlayers, minPlayers, (ArrayList<String>) potionEffects, roundDuration, countdown);
+                Arena arena = new Arena(plugin, route, startLoc, lobbyLoc, maxPlayers, minPlayers, new ArrayList<>(potionEffects), roundDuration, countdown);
                 Bukkit.getLogger().info("Loaded arena " + arena.getName());
                 arenaObjects.add(arena);
+                arenas++;
             }
         }
         Bukkit.getLogger().info("Loaded " + arenas + " TNT-Tag arena(s)!");

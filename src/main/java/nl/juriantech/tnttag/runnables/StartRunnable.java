@@ -4,7 +4,7 @@ import nl.juriantech.tnttag.Tnttag;
 import nl.juriantech.tnttag.enums.GameState;
 import nl.juriantech.tnttag.managers.GameManager;
 import nl.juriantech.tnttag.utils.ChatUtils;
-import org.bukkit.Sound;
+import nl.juriantech.tnttag.utils.RegistryUtils;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -37,7 +37,7 @@ public class StartRunnable extends BukkitRunnable {
         if (timesToBroadcast.contains(timeLeft)) {
             gameManager.playerManager.broadcast(ChatUtils.getRaw("arena.countdown-message").replace("{seconds}", String.valueOf(timeLeft)));
             for (Player player : gameManager.playerManager.getPlayers().keySet()) {
-                player.playSound(player.getLocation(), Sound.valueOf(ChatUtils.getRaw("sounds.countdown").toUpperCase()), 1, 1);
+                player.playSound(player.getLocation(), RegistryUtils.sound(ChatUtils.getRaw("sounds.countdown")), 1, 1);
                 ChatUtils.sendTitle(player, "titles.countdown", 20, 20, 20, timeLeft);
             }
         }

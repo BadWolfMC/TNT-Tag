@@ -7,11 +7,10 @@ import nl.juriantech.tnttag.utils.ChatUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.Plugin;
-import org.bukkit.plugin.PluginDescriptionFile;
 
 import java.io.*;
 import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -33,14 +32,16 @@ public class DumpManager {
         String logContents = getLatestServerLog();
         String expiryDate = getExpiryDate();
 
+        HttpURLConnection connection = null;
         try {
             String apiURL = "https://paste.juriantech.nl/api/create.php";
             String boundary = UUID.randomUUID().toString();
             String lineBreak = "\r\n";
 
-            URL url = new URL(apiURL);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection = (HttpURLConnection) URI.create(apiURL).toURL().openConnection();
             connection.setRequestMethod("POST");
+            connection.setConnectTimeout(5_000);
+            connection.setReadTimeout(10_000);
             connection.setDoOutput(true);
             connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
 
@@ -62,7 +63,7 @@ public class DumpManager {
 
             // Read the response
             StringBuilder responseData = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     responseData.append(line);
@@ -72,10 +73,12 @@ public class DumpManager {
             String response = responseData.toString();
             String link = "https://paste.juriantech.nl/view.php?id=" + response;
 
-            commandSender.sendMessage(ChatUtils.colorize(Tnttag.customizationfile.getString("dump-log.uploaded").replace("{link}", link)));
+            commandSender.sendMessage(ChatUtils.component(Tnttag.customizationfile.getString("dump-log.uploaded").replace("{link}", link)));
         } catch (Exception e) {
-            commandSender.sendMessage(ChatUtils.colorize(Tnttag.customizationfile.getString("dump-log.failed")));
-            e.printStackTrace();
+            commandSender.sendMessage(ChatUtils.component(Tnttag.customizationfile.getString("dump-log.failed")));
+            plugin.getLogger().log(Level.SEVERE, "Error while uploading the latest server log.", e);
+        } finally {
+            if (connection != null) connection.disconnect();
         }
     }
 
@@ -88,12 +91,14 @@ public class DumpManager {
         String serverPlugins = getServerPlugins();
         String tnttagFiles = getTnttagFiles();
 
+        HttpURLConnection connection = null;
         try {
             String apiURL = "https://dumps.juriantech.nl/api.php";
 
-            URL url = new URL(apiURL);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection = (HttpURLConnection) URI.create(apiURL).toURL().openConnection();
             connection.setRequestMethod("POST");
+            connection.setConnectTimeout(5_000);
+            connection.setReadTimeout(10_000);
             connection.setDoOutput(true);
             connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=---boundary");
 
@@ -134,7 +139,7 @@ public class DumpManager {
 
             // Read the response
             StringBuilder responseData = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     responseData.append(line);
@@ -149,19 +154,20 @@ public class DumpManager {
 
             if (jsonObject.has("identifier") && !jsonObject.get("identifier").isJsonNull()) {
                 String identifier = jsonObject.get("identifier").getAsString();
-                commandSender.sendMessage(ChatUtils.colorize(Tnttag.customizationfile.getString("dump-all.uploaded").replace("{identifier}", identifier)));
+                commandSender.sendMessage(ChatUtils.component(Tnttag.customizationfile.getString("dump-all.uploaded").replace("{identifier}", identifier)));
             } else {
-                commandSender.sendMessage(ChatUtils.colorize(Tnttag.customizationfile.getString("dump-all.failed")));
+                commandSender.sendMessage(ChatUtils.component(Tnttag.customizationfile.getString("dump-all.failed")));
             }
         } catch (Exception e) {
             plugin.getLogger().log(Level.SEVERE, "Error while sending the dump data to the server.", e);
-            commandSender.sendMessage(ChatUtils.colorize(Tnttag.customizationfile.getString("dump-all.failed")));
+            commandSender.sendMessage(ChatUtils.component(Tnttag.customizationfile.getString("dump-all.failed")));
+        } finally {
+            if (connection != null) connection.disconnect();
         }
     }
 
     private String getTnttagVersion() {
-        PluginDescriptionFile description = plugin.getDescription();
-        return description.getVersion();
+        return plugin.getPluginMeta().getVersion();
     }
 
     private boolean hasLeakMessages(String serverLog) {
@@ -199,14 +205,12 @@ public class DumpManager {
                 for (File file : files) {
                     if (file.isFile() && file.getPath().endsWith(".yml")) {
                         String fileName = file.getName();
-                        try {
-                            BufferedReader reader = new BufferedReader(new FileReader(file));
+                        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
                             String line;
                             fileContents.append("-----").append(fileName).append("-----\n");
                             while ((line = reader.readLine()) != null) {
                                 fileContents.append(line).append("\n");
                             }
-                            reader.close();
                             fileContents.append("-----END ").append(fileName).append("-----\n");
                         } catch (IOException e) {
                             plugin.getLogger().log(Level.SEVERE, "Error while reading TNTTag file: " + fileName, e);
@@ -222,13 +226,11 @@ public class DumpManager {
     private String getLatestServerLog() {
         File serverLog = new File("logs/latest.log");
         StringBuilder logContent = new StringBuilder();
-        try {
-            BufferedReader reader = new BufferedReader(new FileReader(serverLog));
+        try (BufferedReader reader = new BufferedReader(new FileReader(serverLog))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 logContent.append(line).append("\n");
             }
-            reader.close();
         } catch (IOException e) {
             plugin.getLogger().log(Level.SEVERE, "Error while reading latest server log.", e);
         }

@@ -3,9 +3,9 @@ package nl.juriantech.tnttag.managers;
 import nl.juriantech.tnttag.Tnttag;
 import nl.juriantech.tnttag.objects.PlayerInformation;
 import nl.juriantech.tnttag.utils.ChatUtils;
+import nl.juriantech.tnttag.utils.RegistryUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
@@ -39,7 +39,7 @@ public class LobbyManager {
         playerInformationMap.put(player, new PlayerInformation(plugin, player));
         itemManager.giveGlobalLobbyItems(player);
         if (toggledOn) ChatUtils.sendMessage(player, "player.joined-lobby");
-        if (toggledOn) player.playSound(player.getLocation(), Sound.valueOf(ChatUtils.getRaw("sounds.lobby-join").toUpperCase()), 1, 1);
+        if (toggledOn) player.playSound(player.getLocation(), RegistryUtils.sound(ChatUtils.getRaw("sounds.lobby-join")), 1, 1);
         return true;
     }
 
@@ -51,7 +51,7 @@ public class LobbyManager {
             playerInfo.restore();
         }
         ChatUtils.sendMessage(player, "player.leaved-lobby");
-        player.playSound(player.getLocation(), Sound.valueOf(ChatUtils.getRaw("sounds.lobby-leave").toUpperCase()), 1, 1);
+        player.playSound(player.getLocation(), RegistryUtils.sound(ChatUtils.getRaw("sounds.lobby-leave")), 1, 1);
     }
 
     public boolean playerIsInLobby(Player player) {

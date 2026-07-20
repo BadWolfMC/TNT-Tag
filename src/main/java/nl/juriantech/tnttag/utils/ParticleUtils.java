@@ -1,31 +1,34 @@
 package nl.juriantech.tnttag.utils;
 
+import org.bukkit.Color;
+import org.bukkit.FireworkEffect;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.World;
-import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Firework;
 import org.bukkit.inventory.meta.FireworkMeta;
-import org.bukkit.util.BlockIterator;
 
-import java.util.Objects;
+public final class ParticleUtils {
 
-public class ParticleUtils {
+    private ParticleUtils() {
+    }
 
-    public static void Firework(Location loc, int power) {
-        World world = loc.getWorld();
-        BlockIterator bi = new BlockIterator(loc, 0, 2);
-        Location blocktoadd;
-        while (bi.hasNext()) {
-            blocktoadd = bi.next().getLocation();
-            if (blocktoadd.getBlock().getType() != Material.AIR) {
-                break;
-            }
+    /** Spawns one modern celebration firework instead of iterating through air blocks and creating duplicates. */
+    public static void firework(Location location, int power) {
+        World world = location.getWorld();
+        if (world == null) return;
 
-            Firework firework = (Firework) Objects.requireNonNull(world).spawnEntity(loc, EntityType.FIREWORK);
-            FireworkMeta fireworkMeta = firework.getFireworkMeta();
-            fireworkMeta.setPower(power);
-            firework.setFireworkMeta(fireworkMeta);
-        }
+        world.spawn(location.clone().add(0.0, 0.25, 0.0), Firework.class, firework -> {
+            FireworkMeta meta = firework.getFireworkMeta();
+            meta.clearEffects();
+            meta.addEffect(FireworkEffect.builder()
+                    .with(FireworkEffect.Type.BURST)
+                    .withColor(Color.RED, Color.ORANGE)
+                    .withFade(Color.YELLOW)
+                    .trail(true)
+                    .flicker(true)
+                    .build());
+            meta.setPower(Math.max(0, Math.min(power, 4)));
+            firework.setFireworkMeta(meta);
+        });
     }
 }

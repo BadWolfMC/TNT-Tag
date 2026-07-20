@@ -4,7 +4,8 @@ import nl.juriantech.tnttag.Tnttag;
 import nl.juriantech.tnttag.objects.SimpleLocation;
 import nl.juriantech.tnttag.utils.ChatUtils;
 import org.bukkit.Location;
-import org.bukkit.block.Block;
+import org.bukkit.block.Sign;
+import org.bukkit.block.sign.Side;
 import org.bukkit.entity.Player;
 
 import java.util.List;
@@ -27,17 +28,10 @@ public class LeaveSign implements SignInterface {
 
     @Override
     public void update() {
-        if (loc == null) return;
-
-        Block block = loc.getBlock();
-        if (!(block.getState() instanceof org.bukkit.block.Sign)) return;
-
-        org.bukkit.block.Sign sign = (org.bukkit.block.Sign) block.getState();
-
-        for (int i = 0; i <= 3; i++) {
-            sign.setLine(i, ChatUtils.colorize(signLines.get(i)));
+        if (loc == null || !(loc.getBlock().getState() instanceof Sign sign) || signLines.size() < 4) return;
+        for (int i = 0; i < 4; i++) {
+            sign.getSide(Side.FRONT).line(i, ChatUtils.component(signLines.get(i)));
         }
-
         sign.update(true);
     }
 
