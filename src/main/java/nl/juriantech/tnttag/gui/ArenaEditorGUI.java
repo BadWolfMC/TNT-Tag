@@ -171,7 +171,7 @@ public class ArenaEditorGUI {
                 return;
             }
             ChatUtils.sendMessage(clicker, "editor-gui.settings-applied");
-            plugin.getServer().getScheduler().runTask(plugin, clicker::closeInventory);
+            plugin.getServer().getScheduler().runTask(plugin, () -> clicker.closeInventory());
         }));
 
         menu.fillEmpty(new ItemBuilder(RegistryUtils.material(ChatUtils.getRaw("editor-gui.emptySlotMaterial"))).build());
@@ -182,7 +182,7 @@ public class ArenaEditorGUI {
         return (clicker, event) -> {
             if (arena.getGameManager().hasActiveSession()) {
                 ChatUtils.sendMessage(clicker, "commands.arena-in-use");
-                plugin.getServer().getScheduler().runTask(plugin, clicker::closeInventory);
+                plugin.getServer().getScheduler().runTask(plugin, () -> clicker.closeInventory());
                 return;
             }
             action.handle(clicker, event);

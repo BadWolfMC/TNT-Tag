@@ -65,7 +65,7 @@ public class ArenaSelector {
                     .hideAttributes()
                     .build(), (clicker, event) -> {
                 plugin.getJoinSubCommand().onJoin(clicker, arena.getName());
-                plugin.getServer().getScheduler().runTask(plugin, clicker::closeInventory);
+                plugin.getServer().getScheduler().runTask(plugin, () -> clicker.closeInventory());
             });
         }
 
