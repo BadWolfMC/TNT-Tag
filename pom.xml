@@ -6,7 +6,7 @@
 
     <groupId>nl.juriantech</groupId>
     <artifactId>tnttag</artifactId>
-    <version>10.0.2-SNAPSHOT</version>
+    <version>10.0.3-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>TNT-Tag</name>
@@ -16,7 +16,7 @@
     <properties>
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <paper.version>[26.1.2.build,)</paper.version>
+        <paper.version>[26.2.build,)</paper.version>
     </properties>
 
     <build>

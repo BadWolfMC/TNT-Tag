@@ -2,7 +2,7 @@ name: TNT-Tag
 version: '${project.version}'
 main: nl.juriantech.tnttag.Tnttag
 softdepend: [PlaceholderAPI, TAB]
-api-version: "26.1"
+api-version: "26.2"
 authors: [JasperTheDev, BadWolfMC]
 website: https://github.com/BadWolfMC/TNT-Tag
 description: A TNT-Tag minigame for Paper.
