@@ -12,7 +12,9 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 
 public class ProtectionListener implements Listener {
 
@@ -45,6 +47,20 @@ public class ProtectionListener implements Listener {
         Player player = event.getPlayer();
 
         if (plugin.getLobbyManager().playerIsInLobby(player)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onPlayerSwapHands(PlayerSwapHandItemsEvent event) {
+        if (plugin.getLobbyManager().playerIsInLobby(event.getPlayer())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onPlayerPickupItem(EntityPickupItemEvent event) {
+        if (event.getEntity() instanceof Player player && plugin.getLobbyManager().playerIsInLobby(player)) {
             event.setCancelled(true);
         }
     }

@@ -2,8 +2,7 @@ package nl.juriantech.tnttag.objects;
 
 import nl.juriantech.tnttag.Tnttag;
 
-import java.io.IOException;
-import java.util.*;
+import java.util.UUID;
 
 public class PlayerData {
 
@@ -15,57 +14,48 @@ public class PlayerData {
 
     public void setWins(int wins) {
         Tnttag.playerdatafile.set(uuid + ".wins", wins);
-        savePlayerDataFile();
+        markDirty();
     }
 
     public Integer getWins() {
-        if (Tnttag.playerdatafile.getInt(uuid + ".wins") == null) {
-            return 0;
-        }
-        return Tnttag.playerdatafile.getInt(uuid + ".wins");
+        Integer wins = Tnttag.playerdatafile.getInt(uuid + ".wins");
+        return wins == null ? 0 : wins;
     }
 
-    public void setTimesTagged(int timestagged) {
-        Tnttag.playerdatafile.set(uuid + ".timestagged", timestagged);
-        savePlayerDataFile();
+    public void setTimesTagged(int timesTagged) {
+        Tnttag.playerdatafile.set(uuid + ".timestagged", timesTagged);
+        markDirty();
     }
 
     public Integer getTimesTagged() {
-        if (Tnttag.playerdatafile.getInt(uuid + ".timestagged") == null) {
-            return 0;
-        }
-        return Tnttag.playerdatafile.getInt(uuid + ".timestagged");
+        Integer timesTagged = Tnttag.playerdatafile.getInt(uuid + ".timestagged");
+        return timesTagged == null ? 0 : timesTagged;
     }
 
     public void setTags(int tags) {
         Tnttag.playerdatafile.set(uuid + ".tags", tags);
-        savePlayerDataFile();
+        markDirty();
     }
 
     public Integer getTags() {
-        if (Tnttag.playerdatafile.getInt(uuid + ".tags") == null) {
-            return 0;
-        }
-        return Tnttag.playerdatafile.getInt(uuid + ".tags");
+        Integer tags = Tnttag.playerdatafile.getInt(uuid + ".tags");
+        return tags == null ? 0 : tags;
     }
 
     public void setWinstreak(int winstreak) {
         Tnttag.playerdatafile.set(uuid + ".winstreak", winstreak);
-        savePlayerDataFile();
+        markDirty();
     }
 
     public Integer getWinstreak() {
-        if (Tnttag.playerdatafile.getInt(uuid + ".winstreak") == null) {
-            return 0;
-        }
-        return Tnttag.playerdatafile.getInt(uuid + ".winstreak");
+        Integer winstreak = Tnttag.playerdatafile.getInt(uuid + ".winstreak");
+        return winstreak == null ? 0 : winstreak;
     }
 
-    private void savePlayerDataFile() {
-        try {
-            Tnttag.playerdatafile.save();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+    private void markDirty() {
+        Tnttag plugin = Tnttag.getInstance();
+        if (plugin != null && plugin.getPlayerDataManager() != null) {
+            plugin.getPlayerDataManager().markDirty();
         }
     }
 }

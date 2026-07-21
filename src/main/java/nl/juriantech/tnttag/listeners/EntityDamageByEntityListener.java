@@ -14,11 +14,12 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 public class EntityDamageByEntityListener implements Listener {
 
     private final Tnttag plugin;
-    public final Map<Player, Long> cooldowns = new HashMap<>();
+    public final Map<UUID, Long> cooldowns = new HashMap<>();
 
     public EntityDamageByEntityListener(Tnttag plugin) {
         this.plugin = plugin;
@@ -63,7 +64,7 @@ public class EntityDamageByEntityListener implements Listener {
 
                 if (Tnttag.configfile.getBoolean("cooldown.enabled")) {
                     long currentMilliSeconds = System.currentTimeMillis();
-                    long cooldownEnd = cooldowns.getOrDefault(damager, 0L) + (Tnttag.configfile.getInt("cooldown.duration") * 1000);
+                    long cooldownEnd = cooldowns.getOrDefault(damager.getUniqueId(), 0L) + (Tnttag.configfile.getInt("cooldown.duration") * 1000);
 
                     if (cooldownEnd > currentMilliSeconds) {
                         long secondsRemaining = (cooldownEnd - currentMilliSeconds) / 1000;
@@ -74,7 +75,7 @@ public class EntityDamageByEntityListener implements Listener {
                         return;
                     }
 
-                    cooldowns.put(damager, currentMilliSeconds);
+                    cooldowns.put(damager.getUniqueId(), currentMilliSeconds);
                 }
 
                 event.setDamage(0);

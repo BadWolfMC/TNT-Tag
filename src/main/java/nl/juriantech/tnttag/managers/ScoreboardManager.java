@@ -3,10 +3,11 @@ package nl.juriantech.tnttag.managers;
 import dev.dejvokep.boostedyaml.YamlDocument;
 import nl.juriantech.tnttag.Tnttag;
 import nl.juriantech.tnttag.enums.PlayerType;
+import nl.juriantech.tnttag.objects.PlayerInformation;
 import nl.juriantech.tnttag.utils.ChatUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.scoreboard.Criteria;
 import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
@@ -20,30 +21,26 @@ public class ScoreboardManager {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yy");
 
+    private final Tnttag plugin;
     private final GameManager gameManager;
-    private final org.bukkit.scoreboard.ScoreboardManager scoreboardManager;
     private final Scoreboard scoreboard;
     private final Objective objective;
     private final YamlDocument config;
+    private final BukkitTask updateTask;
+    private boolean closed;
 
     public ScoreboardManager(Tnttag plugin, GameManager gameManager, YamlDocument config) {
+        this.plugin = plugin;
         this.gameManager = gameManager;
         this.config = config;
-        this.scoreboardManager = Bukkit.getScoreboardManager();
-        this.scoreboard = scoreboardManager.getNewScoreboard();
+        this.scoreboard = Bukkit.getScoreboardManager().getNewScoreboard();
         this.objective = scoreboard.registerNewObjective(
                 "TNTTagStats",
                 Criteria.DUMMY,
                 ChatUtils.component(config.getString("scoreboard.title"))
         );
         this.objective.setDisplaySlot(DisplaySlot.SIDEBAR);
-
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                update();
-            }
-        }.runTaskTimer(plugin, 20L, 20L);
+        this.updateTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::update, 20L, 20L);
     }
 
     public void apply() {
@@ -53,9 +50,11 @@ public class ScoreboardManager {
     }
 
     public void remove() {
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            if (player.getScoreboard().equals(scoreboard)) {
-                player.setScoreboard(scoreboardManager.getNewScoreboard());
+        for (Player player : gameManager.playerManager.getPlayers().keySet()) {
+            if (!player.getScoreboard().equals(scoreboard)) continue;
+            PlayerInformation snapshot = plugin.getLobbyManager().getPlayerInformation(player);
+            if (snapshot != null) {
+                player.setScoreboard(snapshot.getScoreboard());
             }
         }
     }
@@ -68,6 +67,14 @@ public class ScoreboardManager {
             String processedLine = replacePlaceholders(configuredLine);
             addLine(processedLine, score--);
         }
+    }
+
+    public void close() {
+        if (closed) return;
+        closed = true;
+        remove();
+        updateTask.cancel();
+        objective.unregister();
     }
 
     private String replacePlaceholders(String text) {
