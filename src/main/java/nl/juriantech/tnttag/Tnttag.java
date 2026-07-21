@@ -1,96 +1,115 @@
 package nl.juriantech.tnttag;
 
-import com.google.common.io.ByteArrayDataOutput;
-import com.google.common.io.ByteStreams;
 import dev.dejvokep.boostedyaml.YamlDocument;
+import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import nl.juriantech.tnttag.api.API;
 import nl.juriantech.tnttag.checkers.UpdateChecker;
-import nl.juriantech.tnttag.hooks.PartiesHook;
-import nl.juriantech.tnttag.hooks.PartyAndFriendsHook;
+import nl.juriantech.tnttag.commands.TntTagCommand;
+import nl.juriantech.tnttag.gui.menu.MenuListener;
 import nl.juriantech.tnttag.hooks.PlaceholderAPIExpansion;
 import nl.juriantech.tnttag.hooks.TabHook;
-import nl.juriantech.tnttag.listeners.*;
-import nl.juriantech.tnttag.managers.*;
-import io.github.rysefoxx.inventory.plugin.pagination.InventoryManager;
+import nl.juriantech.tnttag.listeners.EntityDamageByEntityListener;
+import nl.juriantech.tnttag.listeners.InventoryClickListener;
+import nl.juriantech.tnttag.listeners.ItemListener;
+import nl.juriantech.tnttag.listeners.LeaveListener;
+import nl.juriantech.tnttag.listeners.PlayerJoinListener;
+import nl.juriantech.tnttag.listeners.ProtectionListener;
+import nl.juriantech.tnttag.listeners.SignListener;
+import nl.juriantech.tnttag.managers.ArenaManager;
+import nl.juriantech.tnttag.managers.DumpManager;
+import nl.juriantech.tnttag.managers.ItemManager;
+import nl.juriantech.tnttag.managers.LobbyManager;
+import nl.juriantech.tnttag.managers.PlayerDataManager;
+import nl.juriantech.tnttag.managers.SignManager;
 import nl.juriantech.tnttag.runnables.SignUpdateRunnable;
-import nl.juriantech.tnttag.subcommands.*;
-import nl.juriantech.tnttag.utils.ChatUtils;
+import nl.juriantech.tnttag.subcommands.JoinSubCommand;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitScheduler;
-import revxrsal.commands.bukkit.BukkitCommandHandler;
-import revxrsal.commands.exception.CommandErrorException;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.util.logging.Logger;
+import java.util.List;
+import java.util.logging.Level;
 
 public class Tnttag extends JavaPlugin {
 
-    private final Logger logger = Bukkit.getLogger();
+    private static Tnttag instance;
+    private static API api;
+
+    public static YamlDocument arenasfile;
+    public static YamlDocument customizationfile;
+    public static YamlDocument configfile;
+    public static YamlDocument playerdatafile;
+    public static YamlDocument signsdatafile;
+    public static YamlDocument itemsfile;
+    public static YamlDocument scoreboardFile;
+
     private ArenaManager arenaManager;
-    public static YamlDocument arenasfile, customizationfile, configfile, playerdatafile, signsdatafile, itemsfile, scoreboardFile;
     private UpdateChecker updateChecker;
     private SignManager signManager;
-    private InventoryManager inventoryManager;
-    private PartyAndFriendsHook partyAndFriendsHook;
-    private static API api;
     private LobbyManager lobbyManager;
     private ItemManager itemManager;
     private DumpManager dumpManager;
+    private PlayerDataManager playerDataManager;
     private TabHook tabHook;
     private EntityDamageByEntityListener entityDamageByEntityListener;
     private PlaceholderAPIExpansion placeholderAPIExpansion;
     private JoinSubCommand joinSubCommand;
-    private PartiesHook partiesHook;
+    private boolean initialized;
 
     @Override
     public void onEnable() {
+        instance = this;
+
         updateChecker = new UpdateChecker(this);
         updateChecker.check();
+
         files();
-        menuLibrary();
         managers();
-        runnables();
+        commands();
         listeners();
-        subcommands();
-        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
-            logger.info("[TNT-Tag] PlaceholderAPI detected, enabling the hook.");
-            placeholderAPIExpansion = new PlaceholderAPIExpansion(this);
-            placeholderAPIExpansion.register();
-            logger.info("[TNT-Tag] PlaceholderAPI hooks enabled.");
-        }
-
-        if (Bukkit.getPluginManager().getPlugin("PartyAndFriends") != null) {
-            logger.info("[TNT-Tag] PartyAndFriends detected, enabling the hook.");
-            this.partyAndFriendsHook = new PartyAndFriendsHook();
-            logger.info("[TNT-Tag] PartyAndFriends hooks enabled.");
-        }
-
-        if (Bukkit.getPluginManager().getPlugin("TAB") != null) {
-            logger.info("[TNT-Tag] TAB detected, enabling the hook.");
-            this.tabHook = new TabHook(this);
-            logger.info("[TNT-Tag] TAB hooks enabled.");
-        }
-
-        if (getServer().getPluginManager().isPluginEnabled("Parties")) {
-            this.partiesHook = new PartiesHook();
-            logger.info("[TNT-Tag] Parties hooks enabled.");
-        }
-
+        runnables();
         api = new API(this);
+        hooks();
         getServer().getMessenger().registerOutgoingPluginChannel(this, "BungeeCord");
-        logger.warning("TNT-Tag has been enabled!");
-        new BukkitRunnable() {
-            @Override
-            public void run() {
+
+        // World-backed locations and signs must load after worlds and dependent managers are available.
+        getServer().getScheduler().runTaskLater(this, () -> {
+            try {
+                arenaManager.loadArenasFromFile();
+                if (configfile.getString("globalLobby") != null) {
+                    lobbyManager.load();
+                }
                 signManager.loadSigns();
+                initialized = true;
+                getLogger().info("TNT-Tag has been enabled.");
+            } catch (Exception exception) {
+                getLogger().log(Level.SEVERE, "TNT-Tag could not finish loading its arena and lobby data.", exception);
+                getServer().getPluginManager().disablePlugin(this);
             }
-        }.runTaskLater(this, 20L);
+        }, 20L);
+
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            itemManager.cleanupManagedItems(player);
+        }
     }
 
+    private void hooks() {
+        if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
+            getLogger().info("PlaceholderAPI detected; enabling the hook.");
+            placeholderAPIExpansion = new PlaceholderAPIExpansion(this);
+            placeholderAPIExpansion.register();
+        }
+
+        if (getServer().getPluginManager().isPluginEnabled("TAB")) {
+            getLogger().info("TAB detected; enabling the hook.");
+            tabHook = new TabHook(this);
+        }
+    }
 
     private void runnables() {
         BukkitScheduler scheduler = getServer().getScheduler();
@@ -98,24 +117,20 @@ public class Tnttag extends JavaPlugin {
     }
 
     private void managers() {
-        this.arenaManager = new ArenaManager(this);
-        this.signManager = new SignManager(this);
-        this.itemManager = new ItemManager(this);
-        this.itemManager.load();
-        this.lobbyManager = new LobbyManager(this);
-        this.dumpManager = new DumpManager(this);
-    }
-
-    private void menuLibrary() {
-        this.inventoryManager = new InventoryManager(this);
-        this.inventoryManager.invoke();
+        arenaManager = new ArenaManager(this);
+        signManager = new SignManager(this);
+        itemManager = new ItemManager(this);
+        itemManager.load();
+        lobbyManager = new LobbyManager(this);
+        dumpManager = new DumpManager(this);
+        playerDataManager = new PlayerDataManager(this);
     }
 
     private YamlDocument loadFile(String fileName) {
         try {
             return YamlDocument.create(new File(getDataFolder(), fileName), getResource(fileName));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Unable to load " + fileName, exception);
         }
     }
 
@@ -127,53 +142,18 @@ public class Tnttag extends JavaPlugin {
         signsdatafile = loadFile("signs.yml");
         itemsfile = loadFile("items.yml");
         scoreboardFile = loadFile("scoreboard.yml");
-
-        // We use a runnable, so it loads after the worlds.
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                arenaManager.loadArenasFromFile();
-                if (Tnttag.configfile.getString("globalLobby") != null) {
-                    lobbyManager.load();
-                }
-            }
-        }.runTaskLater(this, 20);
     }
 
-    private void subcommands() {
-        BukkitCommandHandler handler = BukkitCommandHandler.create(this);
-
-        // Arena name resolver
-        handler.registerValueResolver(Arena.class, context -> {
-            String input = context.popForParameter();
-            Arena arena = arenaManager.getArena(input);
-            if (arena == null) {
-                throw new CommandErrorException(ChatUtils.colorize(ChatUtils.getRaw("commands.invalid-arena")));
-            }
-            return arena;
-        });
-
-        handler.register(new CreateSubCommand(this));
-        handler.register(new DeleteSubCommand(this));
-        handler.register(new DumpSubCommand(this));
-        handler.register(new EditorSubCommand(this));
-        handler.register(new HelpSubCommand());
-        handler.register(new InfoSubCommand(this));
-        handler.register(new JoinGUISubCommand(this));
+    private void commands() {
         joinSubCommand = new JoinSubCommand(this);
-        handler.register(joinSubCommand);
-        handler.register(new LeaveSubCommand(this));
-        handler.register(new ListSubCommand(this));
-        handler.register(new ReloadSubCommand(this));
-        handler.register(new SetLobbySubCommand(this));
-        handler.register(new StartSubCommand(this));
-        handler.register(new StatsSubCommand(this));
-        handler.register(new TopSubCommand(this));
-        handler.register(new RandomJoinSubCommand(this));
-        handler.register(new ForceJoinSubCommand(this));
-        handler.register(new ForceLeaveSubCommand(this));
-
-        handler.registerBrigadier();
+        TntTagCommand command = new TntTagCommand(this, joinSubCommand);
+        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
+                event.registrar().register(
+                        command.build(),
+                        "A TNT-Tag minigame for Paper.",
+                        List.of("tt")
+                )
+        );
     }
 
     private void listeners() {
@@ -183,6 +163,7 @@ public class Tnttag extends JavaPlugin {
         getServer().getPluginManager().registerEvents(updateChecker, this);
         getServer().getPluginManager().registerEvents(new LeaveListener(this), this);
         getServer().getPluginManager().registerEvents(new InventoryClickListener(this), this);
+        getServer().getPluginManager().registerEvents(new MenuListener(this), this);
         getServer().getPluginManager().registerEvents(new SignListener(this), this);
         getServer().getPluginManager().registerEvents(new ItemListener(this), this);
         getServer().getPluginManager().registerEvents(new PlayerJoinListener(this), this);
@@ -190,23 +171,66 @@ public class Tnttag extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        arenaManager.endAllArenas();
-        for (Player player : Bukkit.getOnlinePlayers()) {
-            if (lobbyManager.playerIsInLobby(player)) {
-                lobbyManager.leaveLobby(player);
+        // Keep shutdown steps independent so one save or integration failure cannot prevent player restoration.
+        shutdownStep("end active arenas", () -> {
+            if (arenaManager != null) arenaManager.endAllArenas();
+        });
+        shutdownStep("restore lobby players", () -> {
+            if (lobbyManager == null) return;
+            for (Player player : List.copyOf(Bukkit.getOnlinePlayers())) {
+                if (lobbyManager.playerIsInLobby(player)) {
+                    lobbyManager.leaveLobby(player, false);
+                }
             }
+        });
+        shutdownStep("save signs", () -> {
+            if (signManager != null) signManager.saveSigns();
+        });
+        shutdownStep("save arenas", () -> {
+            if (arenaManager != null) arenaManager.saveArenasToFile();
+        });
+        shutdownStep("remove managed items", () -> {
+            if (itemManager == null) return;
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                itemManager.cleanupManagedItems(player);
+            }
+        });
+        shutdownStep("flush player data", () -> {
+            if (playerDataManager != null) playerDataManager.close();
+        });
+
+        api = null;
+        instance = null;
+
+        if (initialized) {
+            getLogger().info("TNT-Tag has been disabled.");
+        } else {
+            getLogger().warning("TNT-Tag was disabled before initialization completed.");
         }
-        signManager.saveSigns();
-        arenaManager.saveArenasToFile();
-        logger.severe("TNT-Tag has been disabled!");
+    }
+
+    private void shutdownStep(String description, Runnable action) {
+        try {
+            action.run();
+        } catch (Exception exception) {
+            getLogger().log(Level.SEVERE, "Failed to " + description + " while disabling TNT-Tag.", exception);
+        }
     }
 
     public void connectToServer(Player player, String serverName) {
-        ByteArrayDataOutput out = ByteStreams.newDataOutput();
-        out.writeUTF("Connect");
-        out.writeUTF(serverName);
+        try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+             DataOutputStream output = new DataOutputStream(bytes)) {
+            output.writeUTF("Connect");
+            output.writeUTF(serverName);
+            player.sendPluginMessage(this, "BungeeCord", bytes.toByteArray());
+        } catch (IOException exception) {
+            // ByteArrayOutputStream does not normally throw, but keep the failure visible if the contract changes.
+            getLogger().log(Level.SEVERE, "Unable to create the BungeeCord transfer message.", exception);
+        }
+    }
 
-        player.sendPluginMessage(this, "BungeeCord", out.toByteArray());
+    public static Tnttag getInstance() {
+        return instance;
     }
 
     public ArenaManager getArenaManager() {
@@ -215,10 +239,6 @@ public class Tnttag extends JavaPlugin {
 
     public SignManager getSignManager() {
         return signManager;
-    }
-
-    public PartyAndFriendsHook getPartyAndFriendsHook() {
-        return partyAndFriendsHook;
     }
 
     public static API getAPI() {
@@ -230,11 +250,15 @@ public class Tnttag extends JavaPlugin {
     }
 
     public ItemManager getItemManager() {
-        return this.itemManager;
+        return itemManager;
     }
 
     public DumpManager getDumpManager() {
         return dumpManager;
+    }
+
+    public PlayerDataManager getPlayerDataManager() {
+        return playerDataManager;
     }
 
     public TabHook getTabHook() {
@@ -249,11 +273,11 @@ public class Tnttag extends JavaPlugin {
         return entityDamageByEntityListener;
     }
 
-    public JoinSubCommand getJoinSubCommand() {
-        return joinSubCommand;
+    public boolean isInitialized() {
+        return initialized;
     }
 
-    public PartiesHook getPartiesHook() {
-        return partiesHook;
+    public JoinSubCommand getJoinSubCommand() {
+        return joinSubCommand;
     }
 }

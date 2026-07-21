@@ -24,13 +24,15 @@ public class LeaveListener implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
 
-        plugin.getEntityDamageByEntityListener().cooldowns.remove(player);
+        if (plugin.getEntityDamageByEntityListener() != null) {
+            plugin.getEntityDamageByEntityListener().cooldowns.remove(player.getUniqueId());
+        }
         if (arenaManager.playerIsInArena(player)) {
-            arenaManager.getPlayerArena(player).getGameManager().playerManager.removePlayer(player, true);
+            arenaManager.getPlayerArena(player).getGameManager().playerManager.removePlayer(player, false);
         }
 
         if (lobbyManager.playerIsInLobby(player)) {
-            lobbyManager.leaveLobby(player);
+            lobbyManager.leaveLobby(player, false);
         }
     }
 }

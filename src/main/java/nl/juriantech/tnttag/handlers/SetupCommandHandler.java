@@ -150,8 +150,11 @@ public class SetupCommandHandler implements Listener {
 
         Arena arena = new Arena(plugin, arenaName, startLocation, lobbyLocation, maxPlayers, minPlayers,
                 defaultPotionEffects, 60, 50);
+        if (!arenaManager.saveArenaToFile(arena)) {
+            player.sendMessage(ChatUtils.component("<red>The arena could not be saved. Check the server console for details."));
+            return;
+        }
         ChatUtils.sendMessage(arena, player, "setup.finished");
-        arenaManager.saveArenaToFile(arena);
         arenaManager.arenaObjects.add(arena);
     }
 }

@@ -1,0 +1,118 @@
+--- a/pom.xml
++++ b/pom.xml
+@@ -16,7 +16,7 @@
+     <properties>
+         <maven.compiler.release>25</maven.compiler.release>
+         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+-        <paper.version>[26.1.2.build,)</paper.version>
++        <paper.version>[26.2.build,)</paper.version>
+     </properties>
+ 
+     <build>
+--- a/src/main/resources/plugin.yml
++++ b/src/main/resources/plugin.yml
+@@ -2,7 +2,7 @@
+ version: '${project.version}'
+ main: nl.juriantech.tnttag.Tnttag
+ softdepend: [PlaceholderAPI, TAB]
+-api-version: "26.1"
++api-version: "26.2"
+ authors: [JasperTheDev, BadWolfMC]
+ website: https://github.com/BadWolfMC/TNT-Tag
+ description: A TNT-Tag minigame for Paper.
+--- a/src/main/java/nl/juriantech/tnttag/subcommands/ReloadSubCommand.java
++++ b/src/main/java/nl/juriantech/tnttag/subcommands/ReloadSubCommand.java
+@@ -26,6 +26,7 @@
+         Tnttag.customizationfile.reload();
+         Tnttag.configfile.reload();
+         Tnttag.scoreboardFile.reload();
++        plugin.getLobbyManager().load();
+         arenaManager.reload();
+         plugin.getItemManager().reload();
+ 
+--- a/src/main/java/nl/juriantech/tnttag/managers/PlayerManager.java
++++ b/src/main/java/nl/juriantech/tnttag/managers/PlayerManager.java
+@@ -87,8 +87,12 @@
+ 
+         Bukkit.getPluginManager().callEvent(new PlayerLeaveArenaEvent(player, gameManager.arena.getName()));
+ 
+-        if (departingType != PlayerType.SURVIVOR) {
+-            // Leaving or losing as a tagger/spectator ends the current streak.
++        boolean abandonedActiveGame = gameManager.state == GameState.INGAME
++                && departingType == PlayerType.SURVIVOR;
++        boolean lostRound = departingType == PlayerType.TAGGER
++                || departingType == PlayerType.SPECTATOR;
++        if (abandonedActiveGame || lostRound) {
++            // Waiting-room departures do not affect streaks; abandoning or losing an active game does.
+             PlayerData playerData = new PlayerData(player.getUniqueId());
+             playerData.setWinstreak(0);
+         }
+--- a/src/main/java/nl/juriantech/tnttag/utils/RegistryUtils.java
++++ b/src/main/java/nl/juriantech/tnttag/utils/RegistryUtils.java
+@@ -14,7 +14,7 @@
+     }
+ 
+     public static Material material(String configuredValue) {
+-        Material material = Registry.MATERIAL.get(key(configuredValue, false));
++        Material material = Registry.MATERIAL.get(key(configuredValue));
+         if (material == null) {
+             throw new IllegalArgumentException("Unknown material: " + configuredValue);
+         }
+@@ -22,7 +22,31 @@
+     }
+ 
+     public static Sound sound(String configuredValue) {
+-        Sound sound = Registry.SOUND_EVENT.get(key(configuredValue, true));
++        if (configuredValue == null || configuredValue.isBlank()) {
++            throw new IllegalArgumentException("Registry value cannot be blank");
++        }
++
++        String normalized = configuredValue.trim().toLowerCase(Locale.ROOT);
++        NamespacedKey directKey = normalized.contains(":")
++                ? NamespacedKey.fromString(normalized)
++                : normalized.contains(".") ? NamespacedKey.minecraft(normalized) : null;
++        Sound sound = directKey == null ? null : Registry.SOUND_EVENT.get(directKey);
++
++        if (sound == null) {
++            // Preserve compatibility with the former enum-style values. Dots in a sound key became
++            // underscores in enum constants, while underscores already present in key segments stayed
++            // underscores, so blindly replacing every underscore with a dot is not reversible.
++            String legacyName = normalized.startsWith("minecraft:")
++                    ? normalized.substring("minecraft:".length())
++                    : normalized;
++            NamespacedKey legacyKey = Registry.SOUND_EVENT.keyStream()
++                    .filter(key -> key.getNamespace().equals(NamespacedKey.MINECRAFT))
++                    .filter(key -> key.getKey().replace('.', '_').equals(legacyName))
++                    .findFirst()
++                    .orElse(null);
++            sound = legacyKey == null ? null : Registry.SOUND_EVENT.get(legacyKey);
++        }
++
+         if (sound == null) {
+             throw new IllegalArgumentException("Unknown sound: " + configuredValue);
+         }
+@@ -30,14 +54,14 @@
+     }
+ 
+     public static PotionEffectType potionEffect(String configuredValue) {
+-        PotionEffectType effect = Registry.MOB_EFFECT.get(key(configuredValue, false));
++        PotionEffectType effect = Registry.MOB_EFFECT.get(key(configuredValue));
+         if (effect == null) {
+             throw new IllegalArgumentException("Unknown potion effect: " + configuredValue);
+         }
+         return effect;
+     }
+ 
+-    private static NamespacedKey key(String configuredValue, boolean sound) {
++    private static NamespacedKey key(String configuredValue) {
+         if (configuredValue == null || configuredValue.isBlank()) {
+             throw new IllegalArgumentException("Registry value cannot be blank");
+         }
+@@ -50,7 +74,6 @@
+             namespace = normalized.substring(0, separator);
+             value = normalized.substring(separator + 1);
+         }
+-        if (sound) value = value.replace('_', '.');
+         normalized = namespace + ":" + value;
+ 
+         NamespacedKey key = NamespacedKey.fromString(normalized);

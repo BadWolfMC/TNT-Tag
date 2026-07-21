@@ -1,10 +1,8 @@
 package nl.juriantech.tnttag.gui;
 
-import io.github.rysefoxx.inventory.plugin.content.IntelligentItem;
-import io.github.rysefoxx.inventory.plugin.content.InventoryContents;
-import io.github.rysefoxx.inventory.plugin.content.InventoryProvider;
-import io.github.rysefoxx.inventory.plugin.pagination.RyseInventory;
 import nl.juriantech.tnttag.Tnttag;
+import nl.juriantech.tnttag.gui.menu.Menu;
+import nl.juriantech.tnttag.gui.menu.MenuLayout;
 import nl.juriantech.tnttag.utils.ChatUtils;
 import nl.juriantech.tnttag.utils.ItemBuilder;
 import nl.juriantech.tnttag.utils.RegistryUtils;
@@ -12,11 +10,19 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 
-import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 public class TopStats {
+
+    private static final MenuLayout DEFAULT_LAYOUT = new MenuLayout(1, Map.of(
+            "first", 2,
+            "second", 4,
+            "third", 6
+    ));
+    private static final List<String> POSITION_KEYS = List.of("first", "second", "third");
 
     private final Player player;
     private final String type;
@@ -32,60 +38,44 @@ public class TopStats {
         Map<UUID, Integer> topData;
         String topMessage;
         switch (type) {
-            case "wins":
+            case "wins" -> {
                 topData = Tnttag.getAPI().getWinsData();
                 topMessage = ChatUtils.getRaw("top-gui.wins");
-                break;
-            case "timestagged":
+            }
+            case "timestagged" -> {
                 topData = Tnttag.getAPI().getTimesTaggedData();
                 topMessage = ChatUtils.getRaw("top-gui.timestagged");
-                break;
-            case "tags":
+            }
+            case "tags" -> {
                 topData = Tnttag.getAPI().getTagsData();
                 topMessage = ChatUtils.getRaw("top-gui.tags");
-                break;
-            default:
+            }
+            default -> {
                 ChatUtils.sendMessage(player, "general.invalid-stat-type");
                 return;
+            }
         }
 
         List<Map.Entry<UUID, Integer>> topThreePlayers = topData.entrySet().stream()
                 .sorted(Map.Entry.comparingByValue(Comparator.reverseOrder()))
                 .limit(3)
-                .collect(Collectors.toList());
+                .toList();
         if (topThreePlayers.isEmpty()) {
             ChatUtils.sendMessage(player, "general.not-enough-stats");
             return;
         }
-        int rows = getRowSize(topThreePlayers.size());
-        RyseInventory inventory = RyseInventory.builder()
-                .title(ChatUtils.colorize(topMessage))
-                .rows(rows)
-                .provider(new InventoryProvider() {
-                    @Override
-                    public void init(Player player, InventoryContents contents) {
-                        AtomicInteger position = new AtomicInteger(1);
-                        topThreePlayers.forEach(entry -> {
-                            UUID playerId = entry.getKey();
-                            int playerStat = entry.getValue();
-                            contents.set(position.getAndIncrement(), IntelligentItem.empty(new ItemBuilder(Material.PLAYER_HEAD).setSkullOwner(playerId.toString()).displayName("<aqua>" + Bukkit.getOfflinePlayer(playerId).getName() + "<gold> - <aqua>" + playerStat).build()));
-                        });
-                        contents.fillEmpty(new ItemBuilder(RegistryUtils.material(ChatUtils.getRaw("top-gui.emptySlotMaterial"))).build());
-                    }
-                })
-                .build(plugin);
-        inventory.open(player);
-    }
 
-    private int getRowSize(int arenaCount) {
-        if (arenaCount <= 8) {
-            return 1;
-        } else if (arenaCount <= 16) {
-            return 2;
-        } else if (arenaCount <= 24) {
-            return 3;
-        } else {
-            return 4;
+        Menu menu = new Menu(plugin, DEFAULT_LAYOUT.size(), ChatUtils.component(topMessage));
+        for (int index = 0; index < topThreePlayers.size(); index++) {
+            Map.Entry<UUID, Integer> entry = topThreePlayers.get(index);
+            String name = Bukkit.getOfflinePlayer(entry.getKey()).getName();
+            if (name == null) name = entry.getKey().toString();
+            menu.setItem(DEFAULT_LAYOUT.slot(POSITION_KEYS.get(index)), new ItemBuilder(Material.PLAYER_HEAD)
+                    .setSkullOwner(entry.getKey().toString())
+                    .displayName("<aqua>" + name + "<gold> - <aqua>" + entry.getValue())
+                    .build());
         }
+        menu.fillEmpty(new ItemBuilder(RegistryUtils.material(ChatUtils.getRaw("top-gui.emptySlotMaterial"))).build());
+        menu.open(player);
     }
 }

@@ -4,11 +4,11 @@ TNT-Tag is a Paper minigame in which players must avoid the tagger, pass the TNT
 
 ## Requirements
 
-- Paper 26.2
+- Paper 26.2 or newer
 - Java 25
 - Maven 3.9+ to build from source
 
-Optional integrations are available for PlaceholderAPI, TAB, Parties, and Party and Friends.
+Optional integrations are available for PlaceholderAPI and TAB.
 
 ## Building
 
@@ -16,7 +16,17 @@ Optional integrations are available for PlaceholderAPI, TAB, Parties, and Party 
 mvn clean verify
 ```
 
-The shaded plugin JAR is written to `target/TNT-Tag.jar`. GitHub Actions also builds and uploads this artifact on pushes and pull requests to `main`.
+The shaded plugin JAR is written to `target/TNT-Tag.jar`. The repository workflows also verify pushes and pull requests with Java 25; deployment to a server remains manual.
+
+The Paper API uses the recommended Maven version range beginning at 26.2, so each intentional clean build resolves the newest Paper API matching that range.
+
+## Architecture
+
+- Commands use Paper's native lifecycle-aware Brigadier command API.
+- Menus use Paper/Bukkit inventories with a plugin-owned `InventoryHolder` and native inventory events.
+- BoostedYAML remains the configuration backend for this phase.
+- Gson is shaded for diagnostic-service JSON responses.
+- PlaceholderAPI and TAB are optional, provided integrations and are not bundled.
 
 ## Configuration formatting
 
@@ -24,7 +34,7 @@ Fresh configuration files use [MiniMessage](https://docs.advntr.dev/minimessage/
 
 ## Installation
 
-1. Install Paper 26.2 with Java 25.
+1. Install Paper 26.2 or newer with Java 25.
 2. Copy `TNT-Tag.jar` into the server's `plugins` directory.
 3. Start the server and configure the lobby and arenas.
 

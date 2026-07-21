@@ -1,14 +1,10 @@
 package nl.juriantech.tnttag.managers;
 
-import com.alessiodp.parties.api.interfaces.Party;
-import de.simonsator.partyandfriends.spigot.api.party.PlayerParty;
 import nl.juriantech.tnttag.Tnttag;
 import nl.juriantech.tnttag.api.PlayerJoinArenaEvent;
 import nl.juriantech.tnttag.api.PlayerLeaveArenaEvent;
 import nl.juriantech.tnttag.enums.GameState;
 import nl.juriantech.tnttag.enums.PlayerType;
-import nl.juriantech.tnttag.hooks.PartiesHook;
-import nl.juriantech.tnttag.hooks.PartyAndFriendsHook;
 import nl.juriantech.tnttag.objects.PlayerData;
 import nl.juriantech.tnttag.objects.PlayerInformation;
 import nl.juriantech.tnttag.utils.ChatUtils;
@@ -36,100 +32,26 @@ public class PlayerManager {
         this.lobbyManager = plugin.getLobbyManager();
     }
     public synchronized void addPlayer(Player player) {
-        if (players.containsKey(player) || !canAcceptPlayers(1)) return;
-
-        if (!ensureLobbyState(player, true)) return;
-
-        int minPlayers = gameManager.arena.getMinPlayers();
-
-        PartyAndFriendsHook pafHook = plugin.getPartyAndFriendsHook();
-        if (pafHook != null && pafHook.playerIsInParty(player.getUniqueId())) {
-            PlayerParty party = pafHook.getPlayerParty(player.getUniqueId());
-            if (party == null || !party.getLeader().getUniqueId().equals(player.getUniqueId())) {
-                ChatUtils.sendMessage(player, "party.not-the-leader");
-                return;
-            }
-
-            List<Player> eligiblePlayers = eligiblePartyPlayers(player, pafHook.getPlayersOfParty(party));
-            if (!canAcceptPlayers(eligiblePlayers.size())) {
-                ChatUtils.sendMessage(player, "party.too-much-players");
-                return;
-            }
-            if (!preparePartyPlayers(eligiblePlayers)) return;
-            for (Player partyPlayer : eligiblePlayers) {
-                internalAddPlayer(partyPlayer, minPlayers);
-                if (!partyPlayer.getUniqueId().equals(player.getUniqueId())) {
-                    ChatUtils.sendMessage(partyPlayer, "party.joined-game");
-                }
-            }
-            return;
-        }
-
-        PartiesHook partiesHook = plugin.getPartiesHook();
-        if (partiesHook != null) {
-            Party party = partiesHook.getPlayerParty(player.getUniqueId());
-            if (party != null) {
-                if (!party.getLeader().equals(player.getUniqueId())) {
-                    ChatUtils.sendMessage(player, "party.not-the-leader");
-                    return;
-                }
-
-                List<Player> eligiblePlayers = eligiblePartyPlayers(player, partiesHook.getPlayersOfParty(party));
-                if (!canAcceptPlayers(eligiblePlayers.size())) {
-                    ChatUtils.sendMessage(player, "party.too-much-players");
-                    return;
-                }
-                if (!preparePartyPlayers(eligiblePlayers)) return;
-                for (Player partyPlayer : eligiblePlayers) {
-                    internalAddPlayer(partyPlayer, minPlayers);
-                    if (!partyPlayer.getUniqueId().equals(player.getUniqueId())) {
-                        ChatUtils.sendMessage(partyPlayer, "party.joined-game");
-                    }
-                }
-                return;
-            }
-        }
-
-        internalAddPlayer(player, minPlayers);
+        addPlayerDirect(player);
     }
 
     /**
-     * Adds exactly one player, bypassing party expansion. Intended for administrative force-join flows.
+     * Adds exactly one player after applying the shared session and capacity guards.
      */
     public synchronized boolean addPlayerDirect(Player player) {
         if (players.containsKey(player) || !canAcceptPlayers(1)) return false;
-        if (!ensureLobbyState(player, true)) return false;
+        if (!ensureLobbyState(player, false)) return false;
 
         internalAddPlayer(player, gameManager.arena.getMinPlayers());
         return players.containsKey(player);
-    }
-
-    private boolean preparePartyPlayers(Collection<Player> partyPlayers) {
-        for (Player partyPlayer : partyPlayers) {
-            if (!ensureLobbyState(partyPlayer, false)) return false;
-        }
-        return true;
     }
 
     private boolean ensureLobbyState(Player player, boolean teleport) {
         return lobbyManager.playerIsInLobby(player) || lobbyManager.enterLobby(player, teleport);
     }
 
-    private List<Player> eligiblePartyPlayers(Player leader, Collection<Player> partyPlayers) {
-        LinkedHashSet<Player> candidates = new LinkedHashSet<>();
-        candidates.add(leader);
-        if (partyPlayers != null) candidates.addAll(partyPlayers);
-
-        return candidates.stream()
-                .filter(Objects::nonNull)
-                .filter(Player::isOnline)
-                .filter(partyPlayer -> !players.containsKey(partyPlayer))
-                .filter(partyPlayer -> !plugin.getArenaManager().playerIsInArena(partyPlayer))
-                .toList();
-    }
-
     private void internalAddPlayer(Player player, int minPlayers) {
-        // A final centralized guard prevents command, party, or same-tick joins from exceeding capacity.
+        // A final centralized guard prevents command or same-tick joins from exceeding capacity.
         if (players.containsKey(player) || !canAcceptPlayers(1)) return;
 
         PlayerJoinArenaEvent event = new PlayerJoinArenaEvent(player, gameManager.arena.getName());
@@ -160,57 +82,64 @@ public class PlayerManager {
     }
 
     public synchronized void removePlayer(Player player, boolean message) {
-        if (!players.containsKey(player)) return;
-        PlayerLeaveArenaEvent event = new PlayerLeaveArenaEvent(player, gameManager.arena.getName());
-        Bukkit.getPluginManager().callEvent(event);
+        PlayerType departingType = players.get(player);
+        if (departingType == null) return;
 
-        PlayerInformation playerInformation = plugin.getLobbyManager().getPlayerInformationMap().get(player);
+        Bukkit.getPluginManager().callEvent(new PlayerLeaveArenaEvent(player, gameManager.arena.getName()));
 
-        if (players.get(player) != PlayerType.SURVIVOR) {
-            // The player lost his winstreak, we process that here to ensure that they can't bypass it by leaving while the game still lasts.
-            // Incrementing the winstreak is done in the GameManager.
+        boolean abandonedActiveGame = gameManager.state == GameState.INGAME
+                && departingType == PlayerType.SURVIVOR;
+        boolean lostRound = departingType == PlayerType.TAGGER
+                || departingType == PlayerType.SPECTATOR;
+        if (abandonedActiveGame || lostRound) {
+            // Waiting-room departures do not affect streaks; abandoning or losing an active game does.
             PlayerData playerData = new PlayerData(player.getUniqueId());
             playerData.setWinstreak(0);
         }
 
-        if (plugin.getTabHook() != null && playerInformation != null) {
-            plugin.getTabHook().setPlayerPrefix(player.getUniqueId(), playerInformation.getTabPrefix());
-        }
-
-        setPlayerType(player, PlayerType.WAITING);
-
-        player.getActivePotionEffects().forEach(potionEffect -> player.removePotionEffect(potionEffect.getType()));
         players.remove(player);
+        removeArenaState(player);
+
         if (message) {
             ChatUtils.sendMessage(player, "player.leaved-arena");
             broadcast(ChatUtils.getRaw("arena.player-leaved").replace("{player}", player.getName()));
         }
 
         if (Tnttag.configfile.getBoolean("global-lobby")) {
+            PlayerInformation snapshot = lobbyManager.getPlayerInformation(player);
+            if (snapshot != null) snapshot.restorePresentation();
             gameManager.itemManager.giveGlobalLobbyItems(player);
-            plugin.getLobbyManager().teleportToLobby(player);
+            lobbyManager.teleportToLobby(player);
             player.setTotalExperience(0);
+            player.setLevel(0);
             player.setExp(0);
         } else {
-            plugin.getLobbyManager().leaveLobby(player);
+            lobbyManager.leaveLobby(player, message);
         }
 
-        if (gameManager.startRunnable != null && !gameManager.startRunnable.isCancelled() && getPlayerCount() < gameManager.arena.getMinPlayers()) {
+        if (gameManager.startRunnable != null
+                && !gameManager.startRunnable.isCancelled()
+                && getPlayerCount() < gameManager.arena.getMinPlayers()) {
             gameManager.startRunnable.cancel();
             broadcast(ChatUtils.getRaw("arena.countdown-stopped").replace("{player}", player.getName()));
             gameManager.setGameState(GameState.IDLE, false);
             return;
         }
 
-        if (getPlayerCount() == 0) gameManager.stop();
+        if (getPlayerCount() == 0) {
+            gameManager.stop();
+            return;
+        }
         if (getPlayerCount() == 1 && gameManager.state == GameState.INGAME) {
             if (message) {
                 broadcast(ChatUtils.getRaw("arena.last-player-leaved").replace("{player}", player.getName()));
             }
             gameManager.setGameState(GameState.ENDING, true);
+            return;
         }
 
-        if (players.entrySet().stream().noneMatch(p -> p.getValue() == PlayerType.TAGGER) && gameManager.state == GameState.INGAME) {
+        if (players.entrySet().stream().noneMatch(entry -> entry.getValue() == PlayerType.TAGGER)
+                && gameManager.state == GameState.INGAME) {
             if (message) {
                 broadcast(ChatUtils.getRaw("arena.last-player-leaved").replace("{player}", player.getName()));
             }
@@ -218,17 +147,39 @@ public class PlayerManager {
         }
     }
 
-    public boolean isIn(Player player) {
-        for (Player p : players.keySet()) {
-            if (p.getName().equals(player.getName())) return true;
+    /**
+     * Detaches a player while the plugin is shutting down without triggering round results,
+     * winstreak mutations, delayed commands, or new game-state transitions.
+     */
+    public synchronized void detachPlayerForShutdown(Player player) {
+        if (players.remove(player) == null) return;
+        removeArenaState(player);
+    }
+
+    private void removeArenaState(Player player) {
+        new ArrayList<>(player.getActivePotionEffects())
+                .forEach(effect -> player.removePotionEffect(effect.getType()));
+        player.setInvisible(false);
+        player.setGameMode(GameMode.SURVIVAL);
+        player.setFlying(false);
+        player.setAllowFlight(false);
+        player.setCollidable(true);
+
+        if (plugin.getTabHook() != null) {
+            plugin.getTabHook().showPlayerName(player.getUniqueId());
+        } else {
+            player.setCustomNameVisible(true);
         }
-        return false;
+    }
+
+    public boolean isIn(Player player) {
+        return players.containsKey(player);
     }
 
     public void setPlayerType(Player player, PlayerType type) {
         if (!players.containsKey(player)) return; //Safety check.
         if (players.get(player) == type) return; //Safety check.
-        PlayerInformation playerInformation = plugin.getLobbyManager().getPlayerInformationMap().get(player);
+        PlayerInformation playerInformation = lobbyManager.getPlayerInformation(player);
 
         //If the player was a spectator before.
         if (players.get(player) == PlayerType.SPECTATOR) {
@@ -237,6 +188,7 @@ public class PlayerManager {
             player.setGameMode(GameMode.SURVIVAL);
             player.setFlying(false);
             player.setAllowFlight(false);
+            player.setCollidable(true);
             if (plugin.getTabHook() != null) {
                 plugin.getTabHook().showPlayerName(player.getUniqueId());
             } else {
@@ -244,9 +196,9 @@ public class PlayerManager {
             }
         }
 
-        //If the player was a tagger before.
-        if (players.get(player).equals(PlayerType.TAGGER)) {
-            givePotionEffects(player);
+        // A tag only completes when the tagger successfully becomes a survivor. Losing a round or
+        // leaving must not award a tag or show the "untagged" message.
+        if (players.get(player) == PlayerType.TAGGER && type == PlayerType.SURVIVOR) {
             gameManager.itemManager.giveGameItems(player);
             ChatUtils.sendMessage(player, "player.tagger-removed");
             ChatUtils.sendTitle(player, "titles.untagged", 20L, 20L, 20L);
@@ -285,6 +237,9 @@ public class PlayerManager {
                 setPlayerName(player, PlayerType.TAGGER);
                 break;
             case SPECTATOR:
+                gameManager.itemManager.clearInventory(player);
+                new ArrayList<>(player.getActivePotionEffects())
+                        .forEach(effect -> player.removePotionEffect(effect.getType()));
                 // The player should be invisible.
                 player.setInvisible(true);
                 player.setGameMode(GameMode.ADVENTURE);
@@ -299,14 +254,15 @@ public class PlayerManager {
     }
 
     private void setPlayerName(Player player, PlayerType playerType) {
-        PlayerInformation playerInformation = plugin.getLobbyManager().getPlayerInformationMap().get(player);
+        PlayerInformation playerInformation = lobbyManager.getPlayerInformation(player);
         if (playerInformation == null) return;
 
         if (playerType == PlayerType.WAITING) {
             player.displayName(playerInformation.getDisplayName());
             player.playerListName(playerInformation.getPlayerListName());
             if (plugin.getTabHook() != null) {
-                plugin.getTabHook().setPlayerPrefix(player.getUniqueId(), playerInformation.getTabPrefix());
+                plugin.getTabHook().resetPlayerPrefix(player.getUniqueId());
+                plugin.getTabHook().showPlayerName(player.getUniqueId());
             }
             return;
         }
@@ -361,10 +317,8 @@ public class PlayerManager {
     }
 
     private void setType(Player player, PlayerType type) {
-        for (Map.Entry<Player, PlayerType> entry : players.entrySet()) {
-            if (entry.getKey().getName().equals(player.getName())) {
-                entry.setValue(type);
-            }
+        if (players.containsKey(player)) {
+            players.put(player, type);
         }
     }
 

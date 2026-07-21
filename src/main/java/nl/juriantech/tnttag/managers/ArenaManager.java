@@ -32,12 +32,16 @@ public class ArenaManager {
     }
 
     public void deleteArena(String name) throws IOException {
-        if (getArena(name) != null) {
-            Arena arena = getArena(name);
-            this.arenaObjects.remove(arena);
-            Tnttag.arenasfile.remove(arena.getName());
-            Tnttag.arenasfile.save();
+        Arena arena = getArena(name);
+        if (arena == null) return;
+        if (arena.getGameManager().hasActiveSession()) {
+            throw new IllegalStateException("Arena '" + name + "' cannot be deleted while it has an active session.");
         }
+
+        Tnttag.arenasfile.remove(arena.getName());
+        Tnttag.arenasfile.save();
+        arena.getGameManager().close();
+        arenaObjects.remove(arena);
     }
 
     public boolean playerIsInArena(Player player) {
@@ -79,7 +83,12 @@ public class ArenaManager {
             Bukkit.getLogger().severe("[Tnt-tag] Error: arenas file is null, could not load arenas.");
             return;
         }
-        if (!arenaObjects.isEmpty()) arenaObjects.clear();
+        if (!arenaObjects.isEmpty()) {
+            if (hasActiveSessions()) {
+                throw new IllegalStateException("Cannot replace loaded arenas while an arena session is active.");
+            }
+            unloadArenas();
+        }
         for (String route : arenasFile.getRoutesAsStrings(false)) {
             String startLocWorldName = arenasFile.getString(route + ".startLocation.world");
             World startLocWorld = Bukkit.getWorld(startLocWorldName);
@@ -126,10 +135,10 @@ public class ArenaManager {
         Bukkit.getLogger().info("Loaded " + arenas + " TNT-Tag arena(s)!");
     }
 
-    public void saveArenaToFile(Arena arena) {
+    public boolean saveArenaToFile(Arena arena) {
         YamlDocument arenasFile = Tnttag.arenasfile;
         if (arena == null) {
-            return;
+            return false;
         }
         arenasFile.set(arena.getName() + ".startLocation.world", Objects.requireNonNull(arena.getStartLocation().getWorld()).getName());
         arenasFile.set(arena.getName() + ".startLocation.x", arena.getStartLocation().getX());
@@ -146,10 +155,12 @@ public class ArenaManager {
         arenasFile.set(arena.getName() + ".countdown", arena.getCountdown());
         try {
             arenasFile.save();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+            Bukkit.getLogger().info("Saved TNT-Tag arena " + arena.getName() + "!");
+            return true;
+        } catch (IOException exception) {
+            plugin.getLogger().severe("Failed to save TNT-Tag arena '" + arena.getName() + "': " + exception.getMessage());
+            return false;
         }
-        Bukkit.getLogger().info("Saved TNT-Tag arena " + arena.getName() + "!");
     }
 
     public int getArenaObjectsSize() {
@@ -157,18 +168,33 @@ public class ArenaManager {
     }
 
     public void reload() throws IOException {
+        if (hasActiveSessions()) {
+            throw new IllegalStateException("Arena data cannot be reloaded while an arena has players or an active game state.");
+        }
         Tnttag.arenasfile.reload();
         Tnttag.arenasfile.save();
-        this.arenaObjects.clear();
+        unloadArenas();
         loadArenasFromFile();
+    }
+
+    public boolean hasActiveSessions() {
+        return arenaObjects.stream().anyMatch(arena -> arena.getGameManager().hasActiveSession());
+    }
+
+    private void unloadArenas() {
+        for (Arena arena : arenaObjects) {
+            arena.getGameManager().close();
+        }
+        arenaObjects.clear();
     }
 
     public void endAllArenas() {
         for (Arena arena : arenaObjects) {
             GameManager manager = arena.getGameManager();
+            manager.close();
             PlayerManager playerManager = manager.playerManager;
             for (Player player : new HashMap<>(playerManager.getPlayers()).keySet()) {
-                playerManager.removePlayer(player, true);
+                playerManager.detachPlayerForShutdown(player);
             }
         }
     }

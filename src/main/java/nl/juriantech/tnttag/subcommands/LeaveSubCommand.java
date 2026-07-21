@@ -5,10 +5,7 @@ import nl.juriantech.tnttag.Tnttag;
 import nl.juriantech.tnttag.managers.ArenaManager;
 import nl.juriantech.tnttag.utils.ChatUtils;
 import org.bukkit.entity.Player;
-import revxrsal.commands.annotation.Command;
-import revxrsal.commands.annotation.Subcommand;
 
-@Command({"tnttag", "tt"})
 public class LeaveSubCommand {
 
     private final Tnttag plugin;
@@ -19,23 +16,29 @@ public class LeaveSubCommand {
         this.arenaManager = plugin.getArenaManager();
     }
 
-    @Subcommand("leave")
     public void onLeave(Player player) {
-        if (arenaManager.playerIsInArena(player)) {
+        boolean wasInArena = arenaManager.playerIsInArena(player);
+        boolean wasInLobby = plugin.getLobbyManager().playerIsInLobby(player);
+
+        if (wasInArena) {
             Arena arena = arenaManager.getPlayerArena(player);
-            arena.getGameManager().playerManager.removePlayer(player, true);
-        } else {
+            if (arena != null) {
+                arena.getGameManager().playerManager.removePlayer(player, true);
+            }
+        } else if (!wasInLobby) {
             ChatUtils.sendMessage(player, "commands.not-in-arena");
+            return;
+        }
+
+        if (Tnttag.configfile.getBoolean("bungee-mode.enabled")) {
+            // PlayerQuitEvent restores any still-active lobby snapshot after a successful proxy transfer.
+            // With the global lobby disabled, removePlayer has already restored the snapshot locally.
+            plugin.connectToServer(player, Tnttag.configfile.getString("bungee-mode.lobby-server"));
+            return;
         }
 
         if (plugin.getLobbyManager().playerIsInLobby(player)) {
-            if (Tnttag.configfile.getBoolean("bungee-mode.enabled")) {
-                //The leaveLobby(player) method will automatically be executed once they actually leave, otherwise they can keep being in the server
-                //if the lobby is offline.
-                plugin.connectToServer(player, Tnttag.configfile.getString("bungee-mode.lobby-server"));
-            } else {
-                plugin.getLobbyManager().leaveLobby(player);
-            }
+            plugin.getLobbyManager().leaveLobby(player);
         }
     }
 }

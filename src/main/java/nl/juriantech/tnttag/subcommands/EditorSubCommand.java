@@ -6,11 +6,7 @@ import nl.juriantech.tnttag.gui.ArenaEditorGUI;
 import nl.juriantech.tnttag.managers.ArenaManager;
 import nl.juriantech.tnttag.utils.ChatUtils;
 import org.bukkit.entity.Player;
-import revxrsal.commands.annotation.Command;
-import revxrsal.commands.annotation.Subcommand;
-import revxrsal.commands.bukkit.annotation.CommandPermission;
 
-@Command({"tnttag", "tt"})
 public class EditorSubCommand {
 
     private final Tnttag plugin;
@@ -21,13 +17,11 @@ public class EditorSubCommand {
         this.arenaManager = plugin.getArenaManager();
     }
 
-    @Subcommand("editor")
-    @CommandPermission("tnttag.editor")
     public void onEditor(Player player, String arenaName) {
         Arena arena = arenaManager.getArena(arenaName);
         if (arena != null) {
-            if (arena.getGameManager().isRunning()) {
-                ChatUtils.sendMessage(player, "commands.arena-is-running");
+            if (arena.getGameManager().hasActiveSession()) {
+                ChatUtils.sendMessage(player, "commands.arena-in-use");
                 return;
             }
             new ArenaEditorGUI(plugin, player, arena).open();

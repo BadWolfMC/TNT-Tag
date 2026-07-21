@@ -14,6 +14,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,6 +25,8 @@ public class Round {
     private final Tnttag plugin;
     private final GameManager gameManager;
     private int roundDuration;
+    private BukkitTask timerTask;
+    private BukkitTask nextRoundTask;
     public boolean ended = false;
 
     public Round(Tnttag plugin, GameManager gameManager) {
@@ -41,7 +44,7 @@ public class Round {
             if (teleportToStart) player.getKey().teleport(gameManager.arena.getStartLocation());
         }
 
-        new BukkitRunnable() {
+        timerTask = new BukkitRunnable() {
             @Override
             public void run() {
                 roundDuration--;
@@ -60,20 +63,18 @@ public class Round {
 
                 if (roundDuration == 0) {
                     cancel();
-                    ended = true;
                     end(false);
                     if (gameManager.playerManager.getPlayerCount() == 1) {
                         gameManager.setGameState(GameState.ENDING, false);
                     } else {
-                        //Start a new round
+                        // Start a new round only if this game is still active when the delay expires.
                         int delayNewRoundSeconds = Tnttag.configfile.getInt("delay.new-round");
                         gameManager.playerManager.broadcast(ChatUtils.getRaw("arena.new-round-starting").replace("%seconds%", String.valueOf(delayNewRoundSeconds)));
-                        new BukkitRunnable() {
-                            @Override
-                            public void run() {
+                        nextRoundTask = plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                            if (gameManager.state == GameState.INGAME && gameManager.round == Round.this) {
                                 gameManager.startRound();
                             }
-                        }.runTaskLater(plugin, delayNewRoundSeconds * 20);
+                        }, delayNewRoundSeconds * 20L);
                     }
                 } else if (roundDuration < 0) {
                     //The game has crashed due to an error
@@ -87,6 +88,9 @@ public class Round {
     }
 
     public void end(boolean forceWinForTagger) {
+        if (ended) return;
+        ended = true;
+        cancel();
         gameManager.playerManager.broadcast(ChatUtils.getRaw("arena.round-ended"));
         for (Map.Entry<Player, PlayerType> entry : gameManager.playerManager.getPlayers().entrySet()) {
             Player player = entry.getKey();
@@ -109,10 +113,6 @@ public class Round {
                     ChatUtils.sendTitle(player, "titles.lose", 20L, 20L, 20L);
                 }
 
-                player.getInventory().setHelmet(new ItemStack(Material.AIR, 1));
-                player.getInventory().setItem(0, new ItemStack(Material.AIR, 1));
-
-
                 gameManager.playerManager.setPlayerType(player, PlayerType.SPECTATOR);
 
                 if (!forceWinForTagger) ChatUtils.sendMessage(player, "player.lost-game");
@@ -127,7 +127,17 @@ public class Round {
 
             ParticleUtils.firework(player.getLocation(), 0);
         }
-        ended = true;
+    }
+
+    public void cancel() {
+        if (timerTask != null) {
+            timerTask.cancel();
+            timerTask = null;
+        }
+        if (nextRoundTask != null) {
+            nextRoundTask.cancel();
+            nextRoundTask = null;
+        }
     }
 
     public void updateCompass(Player player) {

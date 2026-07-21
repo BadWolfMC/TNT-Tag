@@ -5,12 +5,8 @@ import nl.juriantech.tnttag.Tnttag;
 import nl.juriantech.tnttag.managers.ArenaManager;
 import nl.juriantech.tnttag.utils.ChatUtils;
 import org.bukkit.entity.Player;
-import revxrsal.commands.annotation.Command;
-import revxrsal.commands.annotation.Subcommand;
-import revxrsal.commands.bukkit.annotation.CommandPermission;
 
 
-@Command({"tnttag", "tt"})
 public class InfoSubCommand {
 
     private final ArenaManager arenaManager;
@@ -19,8 +15,6 @@ public class InfoSubCommand {
         this.arenaManager = plugin.getArenaManager();
     }
 
-    @Subcommand("info")
-    @CommandPermission("tnttag.info")
     public void onInfo(Player player, String arena) {
         Arena arenaObj = arenaManager.getArena(arena);
         if (arenaObj == null) {

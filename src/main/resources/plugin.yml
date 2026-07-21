@@ -1,8 +1,76 @@
 name: TNT-Tag
 version: '${project.version}'
 main: nl.juriantech.tnttag.Tnttag
-softdepend: [PlaceholderAPI, PartyAndFriends, TAB, Parties]
-api-version: "26.2"
+softdepend: [PlaceholderAPI, TAB]
+api-version: "26.1"
 authors: [JasperTheDev, BadWolfMC]
 website: https://github.com/BadWolfMC/TNT-Tag
 description: A TNT-Tag minigame for Paper.
+
+permissions:
+  tnttag.help:
+    description: View TNT-Tag command help.
+    default: true
+  tnttag.join:
+    description: Join a TNT-Tag lobby or arena.
+    default: true
+  tnttag.gui.join:
+    description: Open the arena selector.
+    default: true
+  tnttag.list:
+    description: List TNT-Tag arenas.
+    default: true
+  tnttag.info:
+    description: View information about a TNT-Tag arena.
+    default: true
+  tnttag.stats:
+    description: View TNT-Tag player statistics.
+    default: true
+  tnttag.top:
+    description: View TNT-Tag leaderboards.
+    default: true
+  tnttag.create:
+    description: Create a TNT-Tag arena.
+    default: op
+  tnttag.delete:
+    description: Delete a TNT-Tag arena.
+    default: op
+  tnttag.editor:
+    description: Open the TNT-Tag arena editor.
+    default: op
+  tnttag.reload:
+    description: Reload TNT-Tag configuration and arena data.
+    default: op
+  tnttag.setlobby:
+    description: Set the TNT-Tag global lobby.
+    default: op
+  tnttag.start:
+    description: Start or stop a TNT-Tag arena.
+    default: op
+  tnttag.forcejoin:
+    description: Force players into a TNT-Tag arena.
+    default: op
+  tnttag.forceleave:
+    description: Force players out of a TNT-Tag arena.
+    default: op
+  tnttag.dump.all:
+    description: Upload a complete TNT-Tag diagnostic dump.
+    default: op
+  tnttag.dump.log:
+    description: Upload the latest server log.
+    default: op
+  tnttag.bypass-forcejoin:
+    description: Prevent other users from force-joining this player.
+    default: op
+  tnttag.bypass-forceleave:
+    description: Prevent other users from force-removing this player.
+    default: op
+  tnttag.createsigns:
+    description: Create TNT-Tag join, leave, and leaderboard signs.
+    default: op
+  tnttag.breaksigns:
+    description: Break TNT-Tag managed signs.
+    default: op
+  tnttag.update:
+    description: Receive TNT-Tag update notifications.
+    default: op

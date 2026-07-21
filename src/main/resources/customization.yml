@@ -45,8 +45,11 @@ commands:
   world-invalid: "<red>One of the worlds you provided is invalid!"
   minplayers-below-2: "<red>The minPlayers argument needs to be at least 2!"
   arena-deleted: "<red>The arena {arena} is successfully deleted!"
+  arena-in-use: "<red>This arena cannot be deleted while players are using it or a game is active."
+  reload-active-arena: "<red>TNT-Tag cannot reload arena data while an arena has players or an active game state."
   files-reloaded: "<dark_green>TNT-Tag is now reloaded!"
   arena-started: "<dark_green>The arena is started successfully."
+  not-enough-players: "<red>This arena needs at least {required} active players to start; it currently has {current}."
   global-lobby-set: "<dark_green>The global lobby is set to your location."
   arena-is-running: "<red>You can't edit this arena while is running, because it will cause errors."
   dump-warning: "<red>Warning: This command should only be used if requested by the developer."
@@ -69,7 +72,7 @@ help-menu:
   - "<aqua>=========TNT-Tag========="
   - "<green>/tnttag help - Shows you this menu!"
   - "<green>/tnttag join (arena) - Join the specified arena!"
-  - "<green>/tnttag autojoin (arena) - Randomly join an arena."
+  - "<green>/tnttag autojoin - Randomly join an arena."
   - "<green>/tnttag joingui - Shows you a nice GUI to join arenas!"
   - "<green>/tnttag leave - Leave the arena that you're in."
   - "<green>/tnttag create - Create an arena, you can find more information on the spigot page."
@@ -77,7 +80,7 @@ help-menu:
   - "<green>/tnttag list - List all the available TNT-Tag arena's!"
   - "<green>/tnttag reload - Reload the plugin."
   - "<green>/tnttag stats - Show your stats!"
-  - "<green>/tnttag top - Shows the top players!"
+  - "<green>/tnttag top (wins|timestagged|tags) - Shows the top players!"
   - "<green>/tnttag editor [arena] - Opens the arena editor."
   - "<green>/tnttag dump log - Dump your latest server log to share it with the developer."
   - "<green>/tnttag dump all - Create a dump from your server so we can quickly solve your issues, this is handled safely and securely. Nobody except our staff team can see them."
@@ -168,11 +171,6 @@ actionBarMessages:
   tagger: "<red>You are the tagger!"
   survivor: "<dark_green>You are a survivor, RUN!"
   spectator: "<dark_gray>You are currently spectating."
-
-party:
-  joined-game: "<aqua>Your party joined the game."
-  too-much-players: "<red>Your party has too much players to join this game!"
-  not-the-leader: "<red>You are not the leader of this party!"
 
 dump-log:
   failed: "<red>An error occurred while uploading the log, report the error under this message to the developer."

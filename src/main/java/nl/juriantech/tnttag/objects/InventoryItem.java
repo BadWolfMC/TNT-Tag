@@ -11,7 +11,7 @@ public class InventoryItem {
 
     public InventoryItem(String name, ItemStack item, String permission, String command) {
         this.name = name;
-        this.item = item;
+        this.item = item.clone();
         this.permission = permission;
         this.command = command;
     }
@@ -21,7 +21,7 @@ public class InventoryItem {
     }
 
     public ItemStack getItem() {
-        return item;
+        return item.clone();
     }
 
     public String getPermission() {

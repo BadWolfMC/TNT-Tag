@@ -176,12 +176,15 @@ public class SignManager {
 
         try {
             signsDataFile.save();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        } catch (IOException exception) {
+            plugin.getLogger().log(java.util.logging.Level.SEVERE, "Failed to save TNT-Tag signs.", exception);
         }
     }
 
     public void loadSigns() {
+        joinSigns.clear();
+        leaveSigns.clear();
+        topSigns.clear();
         YamlDocument signsDataFile = Tnttag.signsdatafile;
         for (String str : signsDataFile.getStringList("joinSigns")) {
             joinSigns.add(JoinSign.fromString(plugin, str));

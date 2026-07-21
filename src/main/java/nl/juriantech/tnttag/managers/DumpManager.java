@@ -8,7 +8,15 @@ import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.Plugin;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
@@ -20,6 +28,9 @@ import java.util.StringJoiner;
 import java.util.UUID;
 import java.util.logging.Level;
 
+/**
+ * Creates diagnostic uploads without performing file or network I/O on the server thread.
+ */
 public class DumpManager {
 
     private final Tnttag plugin;
@@ -28,218 +39,202 @@ public class DumpManager {
         this.plugin = plugin;
     }
 
-    public void dumpLog(CommandSender commandSender) {
-        String logContents = getLatestServerLog();
-        String expiryDate = getExpiryDate();
+    public void dumpLog(CommandSender sender) {
+        String uploadedMessage = Tnttag.customizationfile.getString("dump-log.uploaded");
+        String failedMessage = Tnttag.customizationfile.getString("dump-log.failed");
 
-        HttpURLConnection connection = null;
-        try {
-            String apiURL = "https://paste.juriantech.nl/api/create.php";
-            String boundary = UUID.randomUUID().toString();
-            String lineBreak = "\r\n";
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            HttpURLConnection connection = null;
+            try {
+                String logContents = getLatestServerLog();
+                String boundary = UUID.randomUUID().toString();
+                String lineBreak = "\r\n";
 
-            connection = (HttpURLConnection) URI.create(apiURL).toURL().openConnection();
-            connection.setRequestMethod("POST");
-            connection.setConnectTimeout(5_000);
-            connection.setReadTimeout(10_000);
-            connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+                connection = openPostConnection(
+                        "https://paste.juriantech.nl/api/create.php",
+                        "multipart/form-data; boundary=" + boundary
+                );
 
-            try (OutputStream outputStream = connection.getOutputStream();
-                 PrintWriter writer = new PrintWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8), true)) {
-
-                // Write the log contents and expiry date to the request body
-                writer.append("--").append(boundary).append(lineBreak);
-                writer.append("Content-Disposition: form-data; name=\"contents\"").append(lineBreak);
-                writer.append(lineBreak).append(logContents).append(lineBreak);
-
-                writer.append("--").append(boundary).append(lineBreak);
-                writer.append("Content-Disposition: form-data; name=\"expiry\"").append(lineBreak);
-                writer.append(lineBreak).append(expiryDate).append(lineBreak);
-
-                writer.append("--").append(boundary).append("--").append(lineBreak);
-                writer.flush();
-            }
-
-            // Read the response
-            StringBuilder responseData = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    responseData.append(line);
+                try (OutputStream outputStream = connection.getOutputStream();
+                     PrintWriter writer = new PrintWriter(
+                             new OutputStreamWriter(outputStream, StandardCharsets.UTF_8), true)) {
+                    writer.append("--").append(boundary).append(lineBreak);
+                    writer.append("Content-Disposition: form-data; name=\"contents\"").append(lineBreak);
+                    writer.append(lineBreak).append(logContents).append(lineBreak);
+                    writer.append("--").append(boundary).append(lineBreak);
+                    writer.append("Content-Disposition: form-data; name=\"expiry\"").append(lineBreak);
+                    writer.append(lineBreak).append(getExpiryDate()).append(lineBreak);
+                    writer.append("--").append(boundary).append("--").append(lineBreak);
                 }
+
+                String identifier = readResponse(connection).trim();
+                if (identifier.isEmpty()) {
+                    throw new IOException("The paste service returned an empty identifier.");
+                }
+                send(sender, uploadedMessage.replace(
+                        "{link}", "https://paste.juriantech.nl/view.php?id=" + identifier));
+            } catch (Exception exception) {
+                plugin.getLogger().log(Level.SEVERE, "Error while uploading the latest server log.", exception);
+                send(sender, failedMessage);
+            } finally {
+                if (connection != null) connection.disconnect();
             }
-
-            String response = responseData.toString();
-            String link = "https://paste.juriantech.nl/view.php?id=" + response;
-
-            commandSender.sendMessage(ChatUtils.component(Tnttag.customizationfile.getString("dump-log.uploaded").replace("{link}", link)));
-        } catch (Exception e) {
-            commandSender.sendMessage(ChatUtils.component(Tnttag.customizationfile.getString("dump-log.failed")));
-            plugin.getLogger().log(Level.SEVERE, "Error while uploading the latest server log.", e);
-        } finally {
-            if (connection != null) connection.disconnect();
-        }
+        });
     }
 
-    public void dumpAll(CommandSender commandSender) {
-        String tnttagVersion = getTnttagVersion();
-        String serverSoftware = Bukkit.getName();
-        String serverVersion = Bukkit.getVersion();
-        String latestLog = getLatestServerLog();
-        String supportStatus = hasLeakMessages(latestLog) ? "NONE" : "FULL";
-        String serverPlugins = getServerPlugins();
-        String tnttagFiles = getTnttagFiles();
+    public void dumpAll(CommandSender sender) {
+        // Bukkit/plugin-manager access is captured on the primary thread before the asynchronous work starts.
+        DumpContext context = new DumpContext(
+                plugin.getPluginMeta().getVersion(),
+                Bukkit.getName(),
+                Bukkit.getVersion(),
+                getServerPlugins(),
+                Tnttag.customizationfile.getString("dump-all.uploaded"),
+                Tnttag.customizationfile.getString("dump-all.failed")
+        );
 
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> uploadAll(sender, context));
+    }
+
+    private void uploadAll(CommandSender sender, DumpContext context) {
         HttpURLConnection connection = null;
         try {
-            String apiURL = "https://dumps.juriantech.nl/api.php";
-
-            connection = (HttpURLConnection) URI.create(apiURL).toURL().openConnection();
-            connection.setRequestMethod("POST");
-            connection.setConnectTimeout(5_000);
-            connection.setReadTimeout(10_000);
-            connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=---boundary");
-
-            // Build the request body
+            String latestLog = getLatestServerLog();
             String boundary = "---boundary";
             String lineBreak = "\r\n";
-            String postData =
-                    "--" + boundary + lineBreak +
-                            "Content-Disposition: form-data; name=\"tnttag_version\"" + lineBreak +
-                            lineBreak + tnttagVersion + lineBreak +
-                            "--" + boundary + lineBreak +
-                            "Content-Disposition: form-data; name=\"server_software\"" + lineBreak +
-                            lineBreak + serverSoftware + lineBreak +
-                            "--" + boundary + lineBreak +
-                            "Content-Disposition: form-data; name=\"server_version\"" + lineBreak +
-                            lineBreak + serverVersion + lineBreak +
-                            "--" + boundary + lineBreak +
-                            "Content-Disposition: form-data; name=\"support_status\"" + lineBreak +
-                            lineBreak + supportStatus + lineBreak +
-                            "--" + boundary + lineBreak +
-                            "Content-Disposition: form-data; name=\"server_plugins\"" + lineBreak +
-                            lineBreak + serverPlugins + lineBreak +
-                            "--" + boundary + lineBreak +
-                            "Content-Disposition: form-data; name=\"tnttag_files\"" + lineBreak +
-                            lineBreak + tnttagFiles + lineBreak +
-                            "--" + boundary + lineBreak +
-                            "Content-Disposition: form-data; name=\"latest_log\"" + lineBreak +
-                            lineBreak + latestLog + lineBreak +
-                            "--" + boundary + "--" + lineBreak;
+            String postData = multipartField(boundary, "tnttag_version", context.tnttagVersion())
+                    + multipartField(boundary, "server_software", context.serverSoftware())
+                    + multipartField(boundary, "server_version", context.serverVersion())
+                    + multipartField(boundary, "support_status", hasLeakMessages(latestLog) ? "NONE" : "FULL")
+                    + multipartField(boundary, "server_plugins", context.serverPlugins())
+                    + multipartField(boundary, "tnttag_files", getTnttagFiles())
+                    + multipartField(boundary, "latest_log", latestLog)
+                    + "--" + boundary + "--" + lineBreak;
 
-            byte[] postDataBytes = postData.getBytes(StandardCharsets.UTF_8);
-
-            // Send the request
+            connection = openPostConnection(
+                    "https://dumps.juriantech.nl/api.php",
+                    "multipart/form-data; boundary=" + boundary
+            );
             try (OutputStream outputStream = connection.getOutputStream()) {
-                outputStream.write(postDataBytes);
-                outputStream.flush();
+                outputStream.write(postData.getBytes(StandardCharsets.UTF_8));
             }
 
-            // Read the response
-            StringBuilder responseData = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    responseData.append(line);
-                }
-            }
-
-            JsonObject jsonObject = JsonParser.parseString(responseData.toString()).getAsJsonObject();
+            JsonObject jsonObject = JsonParser.parseString(readResponse(connection)).getAsJsonObject();
             if (jsonObject.has("error") && !jsonObject.get("error").isJsonNull()) {
-                plugin.getLogger().severe("We've spotted an error while dumping your logs: " + jsonObject.get("error").getAsString());
-                return;
+                throw new IOException("Dump service error: " + jsonObject.get("error").getAsString());
+            }
+            if (!jsonObject.has("identifier") || jsonObject.get("identifier").isJsonNull()) {
+                throw new IOException("The dump service response did not contain an identifier.");
             }
 
-            if (jsonObject.has("identifier") && !jsonObject.get("identifier").isJsonNull()) {
-                String identifier = jsonObject.get("identifier").getAsString();
-                commandSender.sendMessage(ChatUtils.component(Tnttag.customizationfile.getString("dump-all.uploaded").replace("{identifier}", identifier)));
-            } else {
-                commandSender.sendMessage(ChatUtils.component(Tnttag.customizationfile.getString("dump-all.failed")));
-            }
-        } catch (Exception e) {
-            plugin.getLogger().log(Level.SEVERE, "Error while sending the dump data to the server.", e);
-            commandSender.sendMessage(ChatUtils.component(Tnttag.customizationfile.getString("dump-all.failed")));
+            send(sender, context.uploadedMessage().replace(
+                    "{identifier}", jsonObject.get("identifier").getAsString()));
+        } catch (Exception exception) {
+            plugin.getLogger().log(Level.SEVERE, "Error while sending the dump data to the server.", exception);
+            send(sender, context.failedMessage());
         } finally {
             if (connection != null) connection.disconnect();
         }
     }
 
-    private String getTnttagVersion() {
-        return plugin.getPluginMeta().getVersion();
+    private HttpURLConnection openPostConnection(String url, String contentType) throws IOException {
+        HttpURLConnection connection = (HttpURLConnection) URI.create(url).toURL().openConnection();
+        connection.setRequestMethod("POST");
+        connection.setConnectTimeout(5_000);
+        connection.setReadTimeout(10_000);
+        connection.setDoOutput(true);
+        connection.setRequestProperty("Content-Type", contentType);
+        return connection;
+    }
+
+    private String readResponse(HttpURLConnection connection) throws IOException {
+        int status = connection.getResponseCode();
+        InputStream stream = status >= 200 && status < 300
+                ? connection.getInputStream()
+                : connection.getErrorStream();
+        if (stream == null) {
+            throw new IOException("HTTP " + status + " returned no response body.");
+        }
+
+        StringBuilder response = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) response.append(line);
+        }
+        if (status < 200 || status >= 300) {
+            throw new IOException("HTTP " + status + ": " + response);
+        }
+        return response.toString();
+    }
+
+    private String multipartField(String boundary, String name, String value) {
+        String lineBreak = "\r\n";
+        return "--" + boundary + lineBreak
+                + "Content-Disposition: form-data; name=\"" + name + "\"" + lineBreak
+                + lineBreak + value + lineBreak;
+    }
+
+    private void send(CommandSender sender, String message) {
+        Bukkit.getScheduler().runTask(plugin, () -> sender.sendMessage(ChatUtils.component(message)));
     }
 
     private boolean hasLeakMessages(String serverLog) {
         List<String> leakSites = Arrays.asList("directleaks", "spigotunlocked", "blackspigot");
-
-        boolean foundLeakMessages = false;
-
-        for (String leakSite : leakSites) {
-            if (serverLog.contains(leakSite)) {
-                foundLeakMessages = true;
-                break;
-            }
-        }
-
-        return foundLeakMessages;
+        return leakSites.stream().anyMatch(serverLog::contains);
     }
 
     private String getServerPlugins() {
         Plugin[] plugins = Bukkit.getPluginManager().getPlugins();
-        StringJoiner pluginList = new StringJoiner(", "); //Using an StringJoiner instead of StringBuilder because it handles the delimiter at the end automatically so it results in cleaner code.
-        for (Plugin plugin : plugins) {
-            pluginList.add(plugin.getName());
+        StringJoiner pluginList = new StringJoiner(", ");
+        for (Plugin installedPlugin : plugins) {
+            pluginList.add(installedPlugin.getName());
         }
-
         return pluginList.toString();
     }
 
     private String getTnttagFiles() {
         File pluginDir = plugin.getDataFolder();
-        StringBuilder fileContents = new StringBuilder(50000);
+        StringBuilder fileContents = new StringBuilder(50_000);
+        File[] files = pluginDir.isDirectory() ? pluginDir.listFiles() : null;
+        if (files == null) return fileContents.toString();
 
-        if (pluginDir.exists() && pluginDir.isDirectory()) {
-            File[] files = pluginDir.listFiles();
-            if (files != null) {
-                for (File file : files) {
-                    if (file.isFile() && file.getPath().endsWith(".yml")) {
-                        String fileName = file.getName();
-                        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
-                            String line;
-                            fileContents.append("-----").append(fileName).append("-----\n");
-                            while ((line = reader.readLine()) != null) {
-                                fileContents.append(line).append("\n");
-                            }
-                            fileContents.append("-----END ").append(fileName).append("-----\n");
-                        } catch (IOException e) {
-                            plugin.getLogger().log(Level.SEVERE, "Error while reading TNTTag file: " + fileName, e);
-                        }
-                    }
-                }
+        for (File file : files) {
+            if (!file.isFile() || !file.getName().endsWith(".yml")) continue;
+            try (BufferedReader reader = new BufferedReader(new FileReader(file, StandardCharsets.UTF_8))) {
+                fileContents.append("-----").append(file.getName()).append("-----\n");
+                String line;
+                while ((line = reader.readLine()) != null) fileContents.append(line).append('\n');
+                fileContents.append("-----END ").append(file.getName()).append("-----\n");
+            } catch (IOException exception) {
+                plugin.getLogger().log(Level.SEVERE, "Error while reading TNT-Tag file: " + file.getName(), exception);
             }
         }
-
         return fileContents.toString();
     }
 
     private String getLatestServerLog() {
         File serverLog = new File("logs/latest.log");
         StringBuilder logContent = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new FileReader(serverLog))) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(serverLog, StandardCharsets.UTF_8))) {
             String line;
-            while ((line = reader.readLine()) != null) {
-                logContent.append(line).append("\n");
-            }
-        } catch (IOException e) {
-            plugin.getLogger().log(Level.SEVERE, "Error while reading latest server log.", e);
+            while ((line = reader.readLine()) != null) logContent.append(line).append('\n');
+        } catch (IOException exception) {
+            plugin.getLogger().log(Level.SEVERE, "Error while reading latest server log.", exception);
         }
         return logContent.toString();
     }
 
     private String getExpiryDate() {
-        LocalDate currentDate = LocalDate.now();
-        LocalDate expiryDate = currentDate.plusDays(7); // Adding 7 days to the current date
-        return expiryDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+        return LocalDate.now().plusDays(7).format(DateTimeFormatter.ISO_LOCAL_DATE);
+    }
+
+    private record DumpContext(
+            String tnttagVersion,
+            String serverSoftware,
+            String serverVersion,
+            String serverPlugins,
+            String uploadedMessage,
+            String failedMessage
+    ) {
     }
 }

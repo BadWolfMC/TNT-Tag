@@ -1,7 +1,6 @@
 package nl.juriantech.tnttag.listeners;
 
 import nl.juriantech.tnttag.Tnttag;
-import nl.juriantech.tnttag.objects.InventoryItem;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -17,24 +16,6 @@ public class ItemListener implements Listener {
         this.plugin = plugin;
     }
 
-    private boolean isCustomItem(ItemStack itemStack) {
-        for (InventoryItem item : plugin.getItemManager().getItems()) {
-            if (itemStack.equals(item.getItem())) return true;
-        }
-        return false;
-    }
-
-    private String getCommandForCustomItem(ItemStack itemStack) {
-        InventoryItem inventoryItem = null;
-
-        for (InventoryItem item : plugin.getItemManager().getItems()) {
-            if (itemStack.equals(item.getItem())) inventoryItem = item;
-        }
-
-        if (inventoryItem != null) return inventoryItem.getCommand();
-        return null;
-    }
-
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
         if (event.getHand() == null) return;
@@ -43,14 +24,12 @@ public class ItemListener implements Listener {
         if (!plugin.getLobbyManager().playerIsInLobby(player)) return;
 
         ItemStack itemInHand = player.getInventory().getItem(event.getHand());
-        if (itemInHand.getType() == Material.AIR) return;
+        if (itemInHand == null || itemInHand.getType() == Material.AIR) return;
 
-        if (isCustomItem(itemInHand)) {
-            String command = getCommandForCustomItem(itemInHand);
-            if (command != null && !command.isEmpty() && !command.equals("NONE")) {
-                player.performCommand(command);
-                event.setCancelled(true);
-            }
-        }
+        String command = plugin.getItemManager().getCommand(itemInHand);
+        if (command == null || command.isBlank() || command.equalsIgnoreCase("NONE")) return;
+
+        event.setCancelled(true);
+        player.performCommand(command);
     }
 }

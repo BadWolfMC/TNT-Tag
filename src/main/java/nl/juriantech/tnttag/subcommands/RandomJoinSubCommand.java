@@ -5,41 +5,31 @@ import nl.juriantech.tnttag.Tnttag;
 import nl.juriantech.tnttag.managers.ArenaManager;
 import nl.juriantech.tnttag.utils.ChatUtils;
 import org.bukkit.entity.Player;
-import revxrsal.commands.annotation.Command;
-import revxrsal.commands.annotation.Subcommand;
-import revxrsal.commands.bukkit.annotation.CommandPermission;
 
-@Command({"tnttag", "tt"})
 public class RandomJoinSubCommand {
 
-    private final Tnttag plugin;
     private final ArenaManager arenaManager;
 
     public RandomJoinSubCommand(Tnttag plugin) {
-        this.plugin = plugin;
         this.arenaManager = plugin.getArenaManager();
     }
 
-    @Subcommand({"randomjoin", "autojoin"})
-    @CommandPermission("tnttag.join")
     public void onJoin(Player player) {
-        if (!Tnttag.configfile.getBoolean("global-lobby") && !plugin.getLobbyManager().playerIsInLobby(player)) {
-            if (!plugin.getLobbyManager().enterLobby(player, false)) return;
-        }
-
         if (arenaManager.playerIsInArena(player)) {
             ChatUtils.sendMessage(player, "player.already-in-game");
             return;
         }
 
-        for (Arena arena : arenaManager.getArenaObjects()) {
-            if (!arena.getGameManager().isRunning()
-                    && arena.getGameManager().playerManager.canAcceptPlayers(1)) {
-                arena.getGameManager().playerManager.addPlayer(player);
-                return;
-            }
+        Arena destination = arenaManager.getArenaObjects().stream()
+                .filter(arena -> !arena.getGameManager().isRunning())
+                .filter(arena -> arena.getGameManager().playerManager.canAcceptPlayers(1))
+                .findFirst()
+                .orElse(null);
+        if (destination == null) {
+            ChatUtils.sendMessage(player, "commands.no-available-arenas");
+            return;
         }
 
-        ChatUtils.sendMessage(player, "commands.no-available-arenas");
+        destination.getGameManager().playerManager.addPlayer(player);
     }
 }
